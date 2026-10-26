@@ -1,0 +1,19 @@
+{
+  "Defaults": {
+    "Application": "SampleApp",
+    "SubApplication": "SampleSubApp",
+    "RunAs": "batch",
+    "Host": "linux-agent-01",
+    "Job": {
+      "When": {"WeekDays": ["MON", "TUE", "WED", "THU", "FRI"], "FromTime": "0300", "ToTime": "2100"}
+    }
+  },
+  "SampleFlow": {
+    "Type": "Folder",
+    "Comment": "written for the tests, same shape as BMC's first-job-flow sample",
+    "CommandJob": {"Type": "Job:Command", "Command": "echo first"},
+    "ScriptJob": {"Type": "Job:Script", "FilePath": "/opt/scripts", "FileName": "second.sh"},
+    "LastJob": {"Type": "Job:Command", "Command": "echo last", "Host": "linux-agent-02"},
+    "Flow": {"Type": "Flow", "Sequence": ["CommandJob", "ScriptJob", "LastJob"]}
+  }
+}

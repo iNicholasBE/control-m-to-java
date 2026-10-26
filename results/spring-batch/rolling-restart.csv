@@ -1,0 +1,17 @@
+phase,at_s,detail
+both nodes up,2.81,cron '35 35 17 * * ?' UTC fires at 2026-10-26T17:35:35+00:00
+"quartz fired, chain in extract",25.67,owner node-a
+"node-b stopped (SIGTERM, not the owner)",27.22,
+node-b back up,29.73,
+SIGTERM to owner node-a during scoring,48.58,
+node-a exited,49.38,
+node-a back up,52.06,
+chain finished,57.43,"state COMPLETED, executions 2"
+steps with more than one attempt,60.05,scoring-partition-1 x2 on node-a node-b; scoring-partition-10 x2 on node-a node-b; scoring-partition-11 x2 on node-a node-b; scoring-partition-12 x2 on node-a node-b; scoring-partition-13 x2 on node-a node-b; scoring-partition-14 x2 on node-a node-b; scoring-partition-15 x2 on node-a node-b; scoring-partition-16 x2 on node-a node-b; scoring-partition-17 x2 on node-a node-b; scoring-partition-18 x2 on node-a node-b; scoring-partition-19 x2 on node-a node-b; scoring-partition-2 x2 on node-a node-b; scoring-partition-20 x2 on node-a node-b; scoring-partition-3 x2 on node-a node-b; scoring-partition-4 x2 on node-a node-b; scoring-partition-5 x2 on node-a node-b; scoring-partition-6 x2 on node-a node-b; scoring-partition-7 x2 on node-a node-b; scoring-partition-8 x2 on node-a node-b; scoring-partition-9 x2 on node-a node-b
+step rows per node,60.05,node-a: 22; node-b: 24
+job executions,60.05,68 STOPPED 17:35:35.541 17:35:59.629; 69 COMPLETED 17:36:00.575 17:36:07.356
+non-completed step executions,60.05,scoring STOPPED 695000; scoring-worker:scoring-partition-1 STOPPED 30000; scoring-worker:scoring-partition-2 STOPPED 50000; scoring-worker:scoring-partition-3 STOPPED 30000; scoring-worker:scoring-partition-4 STOPPED 25000; scoring-worker:scoring-partition-5 STOPPED 40000; scoring-worker:scoring-partition-6 STOPPED 30000; scoring-worker:scoring-partition-7 STOPPED 30000; scoring-worker:scoring-partition-8 STOPPED 40000; scoring-worker:scoring-partition-9 STOPPED 30000; scoring-worker:scoring-partition-10 STOPPED 30000; scoring-worker:scoring-partition-11 STOPPED 40000; scoring-worker:scoring-partition-12 STOPPED 35000; scoring-worker:scoring-partition-13 STOPPED 40000; scoring-worker:scoring-partition-14 STOPPED 30000; scoring-worker:scoring-partition-15 STOPPED 30000; scoring-worker:scoring-partition-16 STOPPED 45000; scoring-worker:scoring-partition-17 STOPPED 35000; scoring-worker:scoring-partition-18 STOPPED 30000; scoring-worker:scoring-partition-19 STOPPED 45000; scoring-worker:scoring-partition-20 STOPPED 30000
+chunk rows read per job execution,60.05,exec 68: 2695000; exec 69: 1305000
+quartz-triggered runs,60.05,1
+deliveries accepted / duplicates rejected,60.05,1 / 0
+report identical to clean single-node run,60.05,True

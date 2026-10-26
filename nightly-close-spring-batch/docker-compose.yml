@@ -1,0 +1,21 @@
+# Standalone Postgres for this module only. The shared harness (../harness/docker-compose.yml, port 5440,
+# user nightly) is the default target; this one exists so the timing runs in results/spring-batch were not
+# disturbed by the JobRunr module running against the shared server at the same time. Same image and settings.
+#   PG_PORT=5434 docker compose up -d
+#   DB_URL=jdbc:postgresql://localhost:5434/nightly_springbatch?reWriteBatchedInserts=true DB_USER=postgres DB_PASSWORD=postgres
+services:
+  postgres:
+    image: postgres:16
+    container_name: nightly-close-springbatch-pg
+    environment:
+      POSTGRES_DB: nightly_springbatch
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command: ["postgres", "-c", "max_connections=300", "-c", "shared_buffers=512MB"]
+    ports:
+      - "${PG_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nightly_springbatch"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

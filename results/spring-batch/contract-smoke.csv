@@ -1,0 +1,19 @@
+check,expected,actual,pass,detail
+POST new identity,202,202,True,STARTING
+POST same identity while running,200,200,True,executionId 62
+chain completes,COMPLETED,COMPLETED,True,"partitions {'done': 20, 'total': 20}, steps 26, sla {'deadline': '2026-10-24T06:00:00Z', 'late': True, 'latenessSeconds': 214407, 'basis': 'finishedAt'}"
+POST same identity after completion,200,200,True,"state COMPLETED, executions 1"
+GET status,200,200,True,state COMPLETED startedAt 2026-10-26T17:33:24.200220Z finishedAt 2026-10-26T17:33:27.207492Z
+GET unknown runNumber,404,404,True,
+"POST same identity, different input hash",409,409,True,Input file hash dcc29026616ab3c77c4336171061db80dec0ab5d8855bfadfb75867a5809007f differs from fb08ecb9f77ceda45b8718f4fa75a98369fa416a2ef5dc8e5f50ee510bf89bb8 recorded for this run; submit a new runNumber for a rerun executionId 62
+POST runNumber=2 (explicit rerun),202,202,True,
+rerun completes,COMPLETED,COMPLETED,True,
+rerun report written,True,True,True,
+deliveries: one per run,2,2,True,NIGHTLY-CLOSE-2026-10-23-1 NIGHTLY-CLOSE-2026-10-23-2
+POST before the file exists,202,202,True,
+watcher waiting,RUNNING,RUNNING,True,state STARTED
+chain completes after file arrives,COMPLETED,COMPLETED,True,6.7s after drop
+bridge READY -> chain -> DONE,COMPLETED,COMPLETED,True,DONE after 3.9s
+bridge run registered as,bridge-file,bridge-file,True,
+two concurrent POSTs,"[200, 202]","[200, 202]",True,
+job instances for 2026-10-20,1,1,True,

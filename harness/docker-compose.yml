@@ -1,0 +1,20 @@
+# One Postgres for both implementations, one database each.
+# Host port 5440 (override with PG_PORT) so it does not collide with other local Postgres instances.
+name: control-m-to-java
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: nightly
+      POSTGRES_PASSWORD: nightly
+      POSTGRES_DB: postgres
+    command: ["postgres", "-c", "max_connections=300", "-c", "shared_buffers=512MB"]
+    ports:
+      - "${PG_PORT:-5440}:5432"
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nightly -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

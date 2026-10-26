@@ -1,0 +1,19 @@
+kill_point,repeat,rows,kill_offset_s,interrupted_steps,resume_s,app_ready_s,recovered_to_completed_s,steps_with_more_than_one_attempt,steps_rerun,chunk_rows_read_before_kill,chunk_rows_read_after_restart,batch_job_executions,deliveries_accepted,duplicate_deliveries_rejected,delivery_receipts,report_identical,final_state
+extract,1,200000,0.8,extract,1.34,1.36,3.37,1,extract,90000,310000,2,1,0,1,True,COMPLETED
+extract,2,200000,0.8,extract,1.38,1.37,3.65,1,extract,95000,305000,2,1,0,1,True,COMPLETED
+extract,3,200000,0.8,extract,1.36,1.36,3.62,1,extract,90000,310000,2,1,0,1,True,COMPLETED
+scoring-partition-3,1,200000,0.3,scoring-partition-* (x20),1.48,1.40,2.43,20,scoring-partition-* (x20),200000,200000,2,1,0,1,True,COMPLETED
+scoring-partition-3,2,200000,0.3,scoring-partition-* (x20),1.50,1.39,2.67,20,scoring-partition-* (x20),205000,195000,2,1,0,1,True,COMPLETED
+scoring-partition-3,3,200000,0.3,scoring-partition-* (x20),1.49,1.40,2.69,20,scoring-partition-* (x20),200000,200000,2,1,0,1,True,COMPLETED
+aggregate,1,200000,0.0,aggregate,1.51,1.52,1.79,1,aggregate,400000,0,2,1,0,1,True,COMPLETED
+aggregate,2,200000,0.0,aggregate,1.39,1.41,1.67,1,aggregate,400000,0,2,1,0,1,True,COMPLETED
+aggregate,3,200000,0.0,aggregate,1.48,1.46,1.73,1,aggregate,400000,0,2,1,0,1,True,COMPLETED
+report,1,200000,0.0,report,1.42,1.46,1.73,1,report,400000,0,2,1,0,1,True,COMPLETED
+report,2,200000,0.0,report,1.40,1.41,1.67,1,report,400000,0,2,1,0,1,True,COMPLETED
+report,3,200000,0.0,report,1.51,1.52,1.78,1,report,400000,0,2,1,0,1,True,COMPLETED
+deliver-before-call,1,200000,0.0,deliver,1.42,1.44,5.52,1,deliver,400000,0,2,1,0,1,True,COMPLETED
+deliver-before-call,2,200000,0.0,deliver,1.40,1.41,5.63,1,deliver,400000,0,2,1,0,1,True,COMPLETED
+deliver-before-call,3,200000,0.0,deliver,1.67,1.68,5.84,1,deliver,400000,0,2,1,0,1,True,COMPLETED
+deliver-after-call-before-record,1,200000,0.0,deliver,1.43,1.45,5.67,1,deliver,400000,0,2,1,1,1,True,COMPLETED
+deliver-after-call-before-record,2,200000,0.0,deliver,1.40,1.41,5.61,1,deliver,400000,0,2,1,1,1,True,COMPLETED
+deliver-after-call-before-record,3,200000,0.0,deliver,2.45,2.44,6.58,1,deliver,400000,0,2,1,1,1,True,COMPLETED

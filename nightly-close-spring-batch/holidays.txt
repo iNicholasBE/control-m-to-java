@@ -1,0 +1,6 @@
+# Business-day calendar for the nightly close: one ISO date per line, comments allowed.
+# Weekends are excluded by the calendar itself; list only weekday holidays here.
+2026-11-11  Armistice Day
+2026-12-25  Christmas Day
+2027-01-01  New Year's Day
+2027-03-29  Easter Monday

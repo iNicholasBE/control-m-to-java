@@ -1,0 +1,326 @@
+/* ------------------------------------------------------------------ */
+/* nightly-close: the reference chain of the control-m-to-java repo   */
+/* Same chain as ../control-m/nightly-close.json and the two Java     */
+/* implementations. Attribute names and syntax are checked against    */
+/* Broadcom TechDocs (AutoSys Workload Automation 12.0.01, see        */
+/* SOURCES.md). Lines marked "verify against your release" could not  */
+/* be confirmed from a public source.                                 */
+/*                                                                    */
+/* Load order: resources first, then the box, then the jobs.          */
+/*   jil < nightly-close.jil                                          */
+/* ------------------------------------------------------------------ */
+
+/* AutoSys has no order date. The business date is a global variable  */
+/* that the upstream side sets before the box starts, for example:    */
+/*   sendevent -E SET_GLOBAL -G "NC_BUSINESS_DATE=20261027"            */
+/*   (sendevent syntax: verify against your release)                  */
+/* The jobs read it as $${NC_BUSINESS_DATE}. The braces matter: a     */
+/* global name may contain a period, so $$NC_BUSINESS_DATE.csv would */
+/* look up a variable called "NC_BUSINESS_DATE.csv".                  */
+
+/* Pool of 20 database connections: a renewable virtual resource.     */
+insert_resource: DB_CONNECTIONS
+res_type: R
+amount: 20
+description: "Connection budget for the risk scoring partitions"
+
+/* Lock on the positions dataset: a renewable resource with 1 unit,   */
+/* so whoever holds it holds it exclusively.                          */
+insert_resource: POSITIONS_DATASET
+res_type: R
+amount: 1
+description: "Exclusive lock on the positions dataset"
+
+/* ---------------------------- the box ----------------------------- */
+insert_job: NC_BOX
+job_type: BOX
+owner: batchusr
+date_conditions: y
+/* BUSINESS_DAYS is a custom calendar made with autocal_asc: Mon to   */
+/* Fri minus the holidays. run_calendar and days_of_week cannot be    */
+/* combined in one job.                                               */
+run_calendar: BUSINESS_DAYS
+/* Time window: nothing in the chain starts before 01:00.             */
+start_times: "01:00"
+/* SLA: MUST_COMPLETE_ALARM if the box (and so DELIVER) is not done   */
+/* by 06:00. This is an alarm, not a prediction.                      */
+must_complete_times: "06:00"
+description: "Nightly close: positions in, regulatory report out"
+
+/* -------------------------- file watcher -------------------------- */
+insert_job: NC_WAIT_POSITIONS
+job_type: FW
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+watch_file: /data/nightly-close/inbox/POSITIONS-$${NC_BUSINESS_DATE}.csv
+watch_interval: 60
+/* give up after 5 hours (01:00 to 06:00) */
+term_run_time: 300
+description: "Wait for POSITIONS-<date>.csv in the inbox"
+
+/* ----------------------------- extract ---------------------------- */
+insert_job: NC_EXTRACT
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/extract.sh --file /data/nightly-close/inbox/POSITIONS-$${NC_BUSINESS_DATE}.csv --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_WAIT_POSITIONS)
+/* free=A releases the lock whatever the outcome */
+resources: (POSITIONS_DATASET, QUANTITY=1, FREE=A)
+n_retrys: 2
+max_exit_success: 0
+description: "Load positions into staging, holding the dataset lock"
+
+/* --------------- risk scoring: 20 partitions, 1 connection each ---- */
+insert_job: NC_SCORE_P01
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 1 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P02
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 2 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P03
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 3 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P04
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 4 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P05
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 5 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P06
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 6 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P07
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 7 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P08
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 8 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P09
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 9 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P10
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 10 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P11
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 11 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P12
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 12 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P13
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 13 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P14
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 14 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P15
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 15 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P16
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 16 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P17
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 17 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P18
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 18 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P19
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 19 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+insert_job: NC_SCORE_P20
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/score.sh --partition 20 --of 20 --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_EXTRACT)
+resources: (DB_CONNECTIONS, QUANTITY=1, FREE=A)
+n_retrys: 3
+max_exit_success: 0
+
+/* ---------------------------- aggregate ---------------------------- */
+insert_job: NC_AGGREGATE
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/aggregate.sh --business-date $${NC_BUSINESS_DATE}
+condition: s(NC_SCORE_P01) AND s(NC_SCORE_P02) AND s(NC_SCORE_P03) AND s(NC_SCORE_P04) AND s(NC_SCORE_P05) AND s(NC_SCORE_P06) AND s(NC_SCORE_P07) AND s(NC_SCORE_P08) AND s(NC_SCORE_P09) AND s(NC_SCORE_P10) AND s(NC_SCORE_P11) AND s(NC_SCORE_P12) AND s(NC_SCORE_P13) AND s(NC_SCORE_P14) AND s(NC_SCORE_P15) AND s(NC_SCORE_P16) AND s(NC_SCORE_P17) AND s(NC_SCORE_P18) AND s(NC_SCORE_P19) AND s(NC_SCORE_P20)
+max_exit_success: 0
+
+/* ------------------------ regulatory report ------------------------ */
+insert_job: NC_REPORT
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/report.sh --business-date $${NC_BUSINESS_DATE} --out /data/nightly-close/outbox/REPORT-$${NC_BUSINESS_DATE}.csv
+condition: s(NC_AGGREGATE)
+max_exit_success: 0
+
+/* ------------------------------ deliver ---------------------------- */
+insert_job: NC_DELIVER
+job_type: CMD
+box_name: NC_BOX
+machine: nc-agent-01
+owner: batchusr
+command: /opt/nightly-close/bin/deliver.sh --file /data/nightly-close/outbox/REPORT-$${NC_BUSINESS_DATE}.csv
+condition: s(NC_REPORT)
+n_retrys: 3
+max_exit_success: 0

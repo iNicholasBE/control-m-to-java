@@ -1,0 +1,50 @@
+{
+  "PAYMENTS": {
+    "Type": "Folder",
+    "Application": "PAYMENTS",
+    "When": {"RuleBasedCalendars": {"Included": ["WORKDAYS"],
+             "WORKDAYS": {"Type": "Calendar:RuleBased", "When": {"WeekDays": ["MON","TUE","WED","THU","FRI"]}}}},
+    "LOAD": {
+      "Type": "Job:Command", "Command": "load.sh", "Host": "pay-agent",
+      "eventsToWaitFor": {"Type": "WaitForEvents", "Events": [{"Event": "EXT_FEED_READY"}]},
+      "eventsToAdd": {"Type": "AddEvents", "Events": [{"Event": "LOAD-TO-POST"}]},
+      "DB_POOL": {"Type": "Resource:Pool", "Quantity": "2"},
+      "LEDGER": {"Type": "Resource:Lock", "LockType": "Exclusive"}
+    },
+    "POST": {
+      "Type": "Job:Command", "Command": "post.sh", "Host": "pay-agent",
+      "ConditionsWithFunnyKeyName": {"Type": "WaitForEvents", "Events": ["(", {"Event": "LOAD-TO-POST"}, ")"]},
+      "eventsToDelete": {"Type": "DeleteEvents", "Events": [{"Event": "LOAD-TO-POST"}]},
+      "IfOk": {"Type": "If:CompletionStatus", "CompletionStatus": "OK",
+               "Notify": {"Type": "Event:Add", "Event": "POST-TO-GL"}}
+    },
+    "HOUSEKEEP": {"Type": "Job:Command", "Command": "cleanup.sh", "Host": "pay-agent"},
+    "REPORTS": {
+      "Type": "SubFolder",
+      "eventsToWaitFor": {"Type": "WaitForEvents", "Events": [{"Event": "POST-TO-REPORTS"}]},
+      "R1": {"Type": "Job:Command", "Command": "r1.sh", "Host": "pay-agent"},
+      "R2": {"Type": "Job:Command", "Command": "r2.sh", "Host": "pay-agent"},
+      "f": {"Type": "Flow", "Sequence": ["R1", "R2"]}
+    },
+    "POST_DONE": {
+      "Type": "Job:Dummy", "Host": "pay-agent",
+      "eventsToAdd": {"Type": "AddEvents", "Events": [{"Event": "POST-TO-REPORTS"}]}
+    }
+  },
+  "GL": {
+    "Type": "Folder",
+    "Application": "GENERAL_LEDGER",
+    "BOOK": {
+      "Type": "Job:Command", "Command": "book.sh", "Host": "gl-agent",
+      "eventsToWaitFor": {"Type": "WaitForEvents", "Events": [{"Event": "POST-TO-GL"}]}
+    }
+  },
+  "MAINFRAME": {
+    "Type": "Folder",
+    "Application": "CORE",
+    "EXTRACT": {"Type": "Job:zOS:Member", "MemberLibrary": "PROD.JCL", "Host": "MVSPROD1",
+                "eventsToAdd": {"Type": "AddEvents", "Events": [{"Event": "EXTRACT-TO-SORT"}]}},
+    "SORT": {"Type": "Job:zOS:Member", "MemberLibrary": "PROD.JCL", "Host": "MVSPROD1",
+             "eventsToWaitFor": {"Type": "WaitForEvents", "Events": [{"Event": "EXTRACT-TO-SORT"}]}}
+  }
+}

@@ -1,0 +1,55 @@
+/* written for the tests: JIL as jil accepts it and as autorep -q prints it */
+insert_job: EOD_BOX   job_type: BOX
+owner: batch
+date_conditions: y
+run_calendar: BUSINESS_DAYS
+start_times: "01:00"
+
+insert_job: EOD_EXTRACT   job_type: CMD
+box_name: EOD_BOX
+machine: app01
+command: /opt/eod/extract.sh
+condition: success(UPSTREAM_FEED^PRD)
+
+insert_job: EOD_LOAD   job_type: CMD
+box_name: EOD_BOX
+machine: app01
+command: /opt/eod/load.sh
+condition: s(EOD_EXTRACT) & value(LOAD_ENABLED)=YES
+resources: (DB_CONNECTIONS, QUANTITY=2, FREE=A) AND (LEDGER, quantity=1)
+
+insert_job: EOD_REPORT
+job_type: CMD
+box_name: EOD_BOX
+machine: app02
+command: /opt/eod/report.sh
+condition: (s(EOD_LOAD) AND d(EOD_EXTRACT,12.00)) | f(EOD_LOAD)
+
+insert_job: EOD_WATCH
+job_type: FW
+machine: app01
+watch_file: /data/in/positions.csv
+
+# a stand-alone job and a deleted one
+insert_job: ADHOC_CLEANUP
+job_type: CMD
+machine: app03
+command: /opt/cleanup.sh
+
+insert_job: OLD_JOB
+job_type: CMD
+machine: app03
+command: /bin/true
+
+delete_job: OLD_JOB
+
+update_job: EOD_WATCH
+machine: app02
+
+insert_job: MF_SORT   job_type: ZOS
+machine: zos_lpar1
+condition: s(EOD_REPORT)
+
+insert_resource: DB_CONNECTIONS
+res_type: R
+amount: 20

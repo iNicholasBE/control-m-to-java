@@ -1,0 +1,64 @@
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: nightly-close-spring-batch
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5440/nightly_springbatch?reWriteBatchedInserts=true}
+    username: ${DB_USER:nightly}
+    password: ${DB_PASSWORD:nightly}
+    hikari:
+      maximum-pool-size: 40
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-batch.sql,classpath:db/schema-quartz.sql,classpath:db/schema-chain.sql
+  batch:
+    job:
+      enabled: false          # never run jobs at boot with empty parameters; chains start via the contract
+    jdbc:
+      initialize-schema: never  # created idempotently by spring.sql.init above
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      initialize-schema: never  # the stock Quartz script drops all tables first; see db/schema-quartz.sql
+    overwrite-existing-jobs: false  # true would reschedule the trigger on every boot and lose a missed fire
+    wait-for-jobs-to-complete-on-shutdown: true
+    properties:
+      org.quartz.scheduler.instanceName: nightly-close
+      org.quartz.scheduler.instanceId: AUTO
+      org.quartz.jobStore.isClustered: true
+      org.quartz.jobStore.clusterCheckinInterval: 5000
+      org.quartz.jobStore.misfireThreshold: 60000
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+      org.quartz.threadPool.threadCount: 3
+  task:
+    scheduling:
+      pool:
+        size: 4
+
+chain:
+  inbox: ${CHAIN_INBOX:./inbox}
+  outbox: ${CHAIN_OUTBOX:./outbox}
+  markers: ${CHAIN_MARKERS:./markers}
+  holidays: ${CHAIN_HOLIDAYS:./holidays.txt}
+  chunk-size: 5000
+  resources:
+    db-connections: 20
+  sla:
+    deadline: "06:00"
+    zone: UTC
+  bridge:
+    inbox: ${CHAIN_BRIDGE_INBOX:./bridge/inbox}
+    outbox: ${CHAIN_BRIDGE_OUTBOX:./bridge/outbox}
+  schedule:
+    cron: "0 30 22 * * ?"
+  test-hooks:
+    deliver-sleep-before-call: ${CHAIN_DELIVER_SLEEP_BEFORE_CALL:0ms}
+    deliver-sleep-after-call: ${CHAIN_DELIVER_SLEEP_AFTER_CALL:0ms}
+
+logging:
+  level:
+    org.springframework.batch.core.step.AbstractStep: WARN

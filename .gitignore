@@ -20,3 +20,9 @@ __pycache__/
 node_modules/
 # local results you have not reviewed
 results/raw/
+
+# generated inputs and caches
+harness/work/
+harness/data/
+nightly-close-spring-batch/work/
+nightly-close-jobrunr/work/

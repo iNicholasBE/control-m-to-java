@@ -1,0 +1,7 @@
+impl,kill_point,repeat,run_at_utc,killed_at_marker,resume_s,total_s,steps_with_more_than_one_attempt,completed_steps_rerun,interrupted_steps,chain_runs_for_date,deliveries_accepted,duplicate_deliveries_rejected,report_identical,notes
+jobrunr-oss,watcher,1,2026-10-26T17:28:23Z,yes,47.8,53.8,watcher:2,,watcher,1,1,0,yes,
+jobrunr-oss,watcher,2,2026-10-26T17:29:50Z,yes,42.9,48.9,watcher:2,,watcher,1,1,0,yes,
+jobrunr-oss,watcher,3,2026-10-26T17:31:11Z,yes,47.8,53.9,watcher:2,,watcher,1,1,0,yes,
+jobrunr-oss,extract,1,2026-10-26T17:32:45Z,yes,49.1,55.6,extract:2 watcher:2,watcher,extract,1,1,0,yes,
+jobrunr-oss,extract,2,2026-10-26T17:34:13Z,yes,44.3,50.3,extract:2 watcher:2,watcher,extract,1,1,0,yes,
+jobrunr-oss,extract,3,2026-10-26T17:35:36Z,yes,48.1,54.2,extract:2 watcher:2,watcher,extract,1,1,0,yes,

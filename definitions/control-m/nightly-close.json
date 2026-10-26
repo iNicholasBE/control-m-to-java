@@ -1,0 +1,1607 @@
+{
+  "NIGHTLY_CLOSE": {
+    "Type": "Folder",
+    "ControlmServer": "CTM_PROD",
+    "OrderMethod": "Automatic",
+    "Application": "FINANCE",
+    "SubApplication": "NIGHTLY_CLOSE",
+    "Description": "Reference chain for the control-m-to-java example repository. Same chain as nightly-close-jobrunr and nightly-close-spring-batch.",
+    "When": {
+      "RuleBasedCalendars": {
+        "Included": [
+          "BUSINESS_DAYS"
+        ],
+        "BUSINESS_DAYS": {
+          "Type": "Calendar:RuleBased",
+          "When": {
+            "WeekDays": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI"
+            ],
+            "MonthDays": [
+              "NONE"
+            ],
+            "DaysRelation": "OR",
+            "ConfirmationCalendars": {
+              "Calendar": "BANK_WORKDAYS",
+              "ExceptionPolicy": "DoNotOrder"
+            }
+          }
+        }
+      }
+    },
+    "WAIT_POSITIONS": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Wait for the positions file of this order date in the inbox",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:FileWatcher:Create",
+      "Path": "/data/nightly-close/inbox/POSITIONS-%%$ODATE.csv",
+      "SearchInterval": "60",
+      "TimeLimit": "300",
+      "MinimumSize": "1B",
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "WAIT_POSITIONS-TO-EXTRACT_POSITIONS"
+          }
+        ]
+      }
+    },
+    "EXTRACT_POSITIONS": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Load the positions file into staging. Holds the positions dataset lock.",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/extract.sh --file /data/nightly-close/inbox/POSITIONS-%%$ODATE.csv --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "2",
+        "Every": "5",
+        "Units": "Minutes"
+      },
+      "POSITIONS_DATASET": {
+        "Type": "Resource:Lock",
+        "LockType": "Exclusive"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "WAIT_POSITIONS-TO-EXTRACT_POSITIONS"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "WAIT_POSITIONS-TO-EXTRACT_POSITIONS"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P01"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P02"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P03"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P04"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P05"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P06"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P07"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P08"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P09"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P10"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P11"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P12"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P13"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P14"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P15"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P16"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P17"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P18"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P19"
+          },
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P20"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunExtract": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P01": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 1 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 1 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P01"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P01"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P01-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P02": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 2 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 2 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P02"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P02"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P02-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P03": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 3 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 3 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P03"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P03"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P03-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P04": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 4 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 4 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P04"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P04"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P04-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P05": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 5 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 5 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P05"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P05"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P05-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P06": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 6 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 6 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P06"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P06"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P06-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P07": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 7 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 7 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P07"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P07"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P07-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P08": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 8 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 8 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P08"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P08"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P08-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P09": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 9 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 9 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P09"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P09"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P09-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P10": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 10 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 10 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P10"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P10"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P10-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P11": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 11 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 11 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P11"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P11"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P11-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P12": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 12 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 12 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P12"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P12"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P12-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P13": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 13 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 13 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P13"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P13"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P13-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P14": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 14 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 14 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P14"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P14"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P14-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P15": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 15 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 15 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P15"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P15"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P15-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P16": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 16 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 16 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P16"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P16"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P16-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P17": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 17 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 17 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P17"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P17"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P17-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P18": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 18 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 18 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P18"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P18"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P18-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P19": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 19 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 19 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P19"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P19"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P19-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "SCORE_P20": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Risk scoring for portfolio partition 20 of 20",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/score.sh --partition 20 --of 20 --business-date %%$ODATE",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "2",
+        "Units": "Minutes"
+      },
+      "DB_CONNECTIONS": {
+        "Type": "Resource:Pool",
+        "Quantity": "1"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P20"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "EXTRACT_POSITIONS-TO-SCORE_P20"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P20-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunPartition": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "AGGREGATE_RISK": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Aggregate the 20 partition results",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/aggregate.sh --business-date %%$ODATE",
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P01-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P02-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P03-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P04-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P05-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P06-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P07-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P08-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P09-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P10-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P11-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P12-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P13-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P14-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P15-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P16-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P17-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P18-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P19-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P20-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "SCORE_P01-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P02-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P03-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P04-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P05-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P06-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P07-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P08-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P09-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P10-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P11-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P12-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P13-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P14-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P15-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P16-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P17-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P18-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P19-TO-AGGREGATE_RISK"
+          },
+          {
+            "Event": "SCORE_P20-TO-AGGREGATE_RISK"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "AGGREGATE_RISK-TO-REGULATORY_REPORT"
+          }
+        ]
+      }
+    },
+    "REGULATORY_REPORT": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Write the regulatory report for this order date",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/report.sh --business-date %%$ODATE --out /data/nightly-close/outbox/REPORT-%%$ODATE.csv",
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "AGGREGATE_RISK-TO-REGULATORY_REPORT"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "AGGREGATE_RISK-TO-REGULATORY_REPORT"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "REGULATORY_REPORT-TO-DELIVER_REPORT"
+          }
+        ]
+      }
+    },
+    "DELIVER_REPORT": {
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "Deliver the report to the regulator gateway",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "Type": "Job:Command",
+      "Command": "/opt/nightly-close/bin/deliver.sh --file /data/nightly-close/outbox/REPORT-%%$ODATE.csv",
+      "RerunLimit": {
+        "Times": "3",
+        "Every": "5",
+        "Units": "Minutes"
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "REGULATORY_REPORT-TO-DELIVER_REPORT"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "REGULATORY_REPORT-TO-DELIVER_REPORT"
+          }
+        ]
+      },
+      "eventsToAdd": {
+        "Type": "AddEvents",
+        "Events": [
+          {
+            "Event": "DELIVER_REPORT-TO-NIGHTLY_CLOSE_SLA"
+          }
+        ]
+      },
+      "ActionIfFailure": {
+        "Type": "If",
+        "CompletionStatus": "NOTOK",
+        "RerunDelivery": {
+          "Type": "Action:Rerun"
+        }
+      }
+    },
+    "NIGHTLY_CLOSE_SLA": {
+      "Type": "Job:SLAManagement",
+      "ServiceName": "Nightly close regulatory report",
+      "ServicePriority": "1",
+      "JobRunsDeviationsTolerance": "2",
+      "CompleteBy": {
+        "Time": "06:00",
+        "Days": "0"
+      },
+      "Host": "nightly-close-agents",
+      "RunAs": "batchusr",
+      "Application": "FINANCE",
+      "SubApplication": "NIGHTLY_CLOSE",
+      "Description": "SLA: report delivered by 06:00. Control-M predicts breaches from run history while the chain runs.",
+      "When": {
+        "FromTime": "0100",
+        "RuleBasedCalendars": {
+          "Included": [
+            "USE PARENT"
+          ]
+        }
+      },
+      "eventsToWaitFor": {
+        "Type": "WaitForEvents",
+        "Events": [
+          {
+            "Event": "DELIVER_REPORT-TO-NIGHTLY_CLOSE_SLA"
+          }
+        ]
+      },
+      "eventsToDelete": {
+        "Type": "DeleteEvents",
+        "Events": [
+          {
+            "Event": "DELIVER_REPORT-TO-NIGHTLY_CLOSE_SLA"
+          }
+        ]
+      }
+    }
+  }
+}
