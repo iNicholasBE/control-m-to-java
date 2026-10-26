@@ -1,0 +1,22 @@
+# Never commit JobRunr Pro credentials or licences
+gradle.properties
+settings.xml
+.env
+*.env
+*.license
+**/jobrunr-pro-license*
+# build output
+target/
+build/
+.gradle/
+*.class
+*.log
+.idea/
+*.iml
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+# local results you have not reviewed
+results/raw/
