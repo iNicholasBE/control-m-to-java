@@ -62,9 +62,10 @@ public class PositionsExtractor {
     private long copy(Connection connection, ChainRun run) throws Exception {
         var copyApi = connection.unwrap(PGConnection.class).getCopyAPI();
         CopyIn copyIn = copyApi.copyIn("COPY positions_staging (run_id," + HEADER + ") FROM STDIN WITH (FORMAT csv)");
-        // The file has no run id; prefix it to every line on the way in.
-        byte[] prefix = (run.runId() + ",").getBytes(StandardCharsets.UTF_8);
-        byte[] newline = {'\n'};
+        // The file has no run id; prefix it to every line on the way in. Lines are buffered and handed to COPY in
+        // 256 KB chunks: one writeToCopy call per line (600,000 calls for 200,000 rows) costs more than the load itself.
+        String prefix = run.runId() + ",";
+        StringBuilder buffer = new StringBuilder(300_000);
         try (BufferedReader reader = Files.newBufferedReader(files.pathFor(run.businessDate()), StandardCharsets.UTF_8)) {
             String header = reader.readLine();
             if (!HEADER.equals(header)) {
@@ -73,10 +74,16 @@ public class PositionsExtractor {
             }
             for (String line; (line = reader.readLine()) != null; ) {
                 if (line.isEmpty()) continue;
-                byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
-                copyIn.writeToCopy(prefix, 0, prefix.length);
-                copyIn.writeToCopy(bytes, 0, bytes.length);
-                copyIn.writeToCopy(newline, 0, 1);
+                buffer.append(prefix).append(line).append('\n');
+                if (buffer.length() >= 256 * 1024) {
+                    byte[] chunk = buffer.toString().getBytes(StandardCharsets.UTF_8);
+                    copyIn.writeToCopy(chunk, 0, chunk.length);
+                    buffer.setLength(0);
+                }
+            }
+            if (buffer.length() > 0) {
+                byte[] chunk = buffer.toString().getBytes(StandardCharsets.UTF_8);
+                copyIn.writeToCopy(chunk, 0, chunk.length);
             }
             return copyIn.endCopy();
         } catch (Exception e) {
