@@ -7,6 +7,8 @@
 # deliver-before-call, deliver-after-call-before-record, recurring-trigger.
 # The app pauses for a few seconds right after writing <killPoint>.entered (nightly-close.test.pause-at), so the
 # kill lands there. The restart runs without the pause. Appends one row per repeat to <results>/kill-tests.csv.
+# recurring-trigger: the cron trigger submits today's run without a positions file, is killed, and the file
+# arrives after the restart; the test checks that exactly one run starts.
 source "$(dirname "$0")/lib.sh"
 
 [[ $# -eq 3 ]] || die "usage: kill_test.sh <impl> <killPoint> <repeats>"
@@ -27,7 +29,7 @@ build_impl
 POSITIONS=$(positions_file "$DATE" 1)
 
 # The reference: one clean run of the same implementation for the same date.
-REFERENCE="$HARNESS/work/reference/$IMPL/REPORT-$DATE-1.csv"
+REFERENCE="$HARNESS/work/reference/$IMPL/1x/REPORT-$DATE-1.csv"
 if [[ ! -f "$REFERENCE" ]]; then
   log "no reference report for $IMPL $DATE yet, running a clean chain first"
   TRIGGER_CRON=- TRIGGER_ENABLED=false NO_BUILD=1 "$HARNESS/run_chain.sh" "$IMPL" "$DATE" --label "reference for kill tests" --save-reference
@@ -40,7 +42,7 @@ WORK="$HARNESS/work/$IMPL-kill"
 for repeat in $(seq 1 "$REPEATS"); do
   log "$IMPL kill at '$KILL_POINT', repeat $repeat/$REPEATS"
   reset_db
-  prepare_workdir "$WORK" "$POSITIONS"
+  prepare_workdir "$WORK"
   RUN_AT=$(iso_now)
   PID=$(start_app "$WORK" "$IMPL_PORT" "--nightly-close.test.pause-at=$KILL_POINT" "--nightly-close.test.pause-duration=$PAUSE")
   wait_ready "$IMPL_PORT" "$PID"
@@ -59,6 +61,8 @@ for repeat in $(seq 1 "$REPEATS"); do
 
   T_RESTART=$(now_ms)
   PID=$(start_app "$WORK" "$IMPL_PORT")
+  # The cron trigger only submits the run; it starts once the positions file arrives, which it does after the restart.
+  [[ "$KILL_POINT" == "recurring-trigger" ]] && { wait_ready "$IMPL_PORT" "$PID"; drop_positions "$WORK" "$POSITIONS"; }
   if wait_for_file "$WORK/bridge/outbox/NIGHTLY-CLOSE-$DATE-DONE" 900; then
     T_DONE=$(now_ms)
     RESUME=$(secs_between "$T_RESTART" "$T_DONE"); TOTAL=$(secs_between "$T0" "$T_DONE")

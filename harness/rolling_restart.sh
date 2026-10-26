@@ -22,10 +22,10 @@ PORT_A=$((IMPL_PORT + 10)); PORT_B=$((IMPL_PORT + 20))
 postgres_up
 build_impl
 POSITIONS=$(positions_file "$DATE" "$SCALE")
-REFERENCE="$HARNESS/work/reference/$IMPL/REPORT-$DATE-1.csv"
+REFERENCE="$HARNESS/work/reference/$IMPL/${SCALE}x/REPORT-$DATE-1.csv"
 WORK="$HARNESS/work/$IMPL-rolling"
 reset_db
-prepare_workdir "$WORK" "$POSITIONS"
+prepare_workdir "$WORK"
 
 PID_A=$(start_app "$WORK" "$PORT_A"); wait_ready "$PORT_A" "$PID_A"
 PID_B=$(start_app "$WORK" "$PORT_B"); wait_ready "$PORT_B" "$PID_B"
@@ -61,7 +61,7 @@ RERUN=$(sql "SELECT coalesce(string_agg(DISTINCT a.step, ' '), '') FROM step_exe
 ACCEPTED=$(sql "SELECT count(*) FROM deliveries WHERE business_date = '$DATE'")
 REJECTED=$(sql "SELECT count(*) FROM delivery_rejections WHERE business_date = '$DATE'")
 IDENTICAL=n/a
-if [[ "$SCALE" == 1 && -f "$REFERENCE" ]]; then
+if [[ -f "$REFERENCE" ]]; then
   if cmp -s "$WORK/outbox/REPORT-$DATE-1.csv" "$REFERENCE"; then IDENTICAL=yes; else IDENTICAL=no; fi
 fi
 

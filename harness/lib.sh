@@ -71,13 +71,17 @@ positions_file() {
   echo "$file"
 }
 
-# prepare_workdir <dir> <positions file>: a clean working directory, the app runs with it as cwd.
+# prepare_workdir <dir>: a clean working directory, the app runs with it as cwd.
 prepare_workdir() {
-  local dir="$1" positions="$2"
+  local dir="$1"
   rm -rf "$dir"
   mkdir -p "$dir/inbox" "$dir/outbox" "$dir/markers" "$dir/bridge/inbox" "$dir/bridge/outbox"
   cp "$HARNESS/holidays.txt" "$dir/holidays.txt"
-  ln "$positions" "$dir/inbox/" 2>/dev/null || cp "$positions" "$dir/inbox/"
+}
+
+# drop_positions <dir> <positions file>: the file arrives in the inbox (a hard link, so it appears atomically).
+drop_positions() {
+  ln "$2" "$1/inbox/" 2>/dev/null || cp "$2" "$1/inbox/"
 }
 
 # start_app <workdir> <port> [extra args...]: prints the pid. The JVM is started directly, so the pid is the JVM's.
@@ -86,10 +90,11 @@ start_app() {
   if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
     die "port $port is already in use; stop that process first (the harness never kills processes it did not start)"
   fi
-  local args
-  args=$(impl_args "$port")
+  # impl_args prints one argument per line, so values with spaces (a cron expression) survive.
+  local args=() arg
+  while IFS= read -r arg; do args+=("$arg"); done < <(impl_args "$port")
   # shellcheck disable=SC2086
-  (cd "$dir" && exec "$JAVA_HOME/bin/java" $JAVA_OPTS -jar "$IMPL_JAR" $args "$@" >>"$dir/app-$port.log" 2>&1) &
+  (cd "$dir" && exec "$JAVA_HOME/bin/java" $JAVA_OPTS -jar "$IMPL_JAR" "${args[@]}" "$@" >>"$dir/app-$port.log" 2>&1) &
   echo $!
 }
 
@@ -119,9 +124,11 @@ wait_for_file() {
   done
 }
 
-# trigger <workdir> <port> <date> <transport> [runNumber]
+# trigger <workdir> <port> <date> <transport> [runNumber]: the positions file arrives ($POSITIONS), then the
+# mainframe signals through the bridge. The inbox watcher may start the run from the file before the signal lands.
 trigger() {
   local dir="$1" port="$2" date="$3" transport="$4" run="${5:-1}"
+  drop_positions "$dir" "$POSITIONS"
   case "$transport" in
     file)
       printf 'runNumber=%s\n' "$run" >"$dir/bridge/inbox/.NIGHTLY-CLOSE-$date-READY.tmp"

@@ -45,6 +45,10 @@ public class ChainRunRepository {
                 .params(to.name(), runId, from.name()).update();
     }
 
+    public List<ChainRun> findInState(RunState state) {
+        return jdbc.sql("SELECT * FROM chain_runs WHERE state = ? ORDER BY submitted_at").param(state.name()).query(this::map).list();
+    }
+
     public void markStarted(UUID runId, String inputSha256) {
         jdbc.sql("""
                         UPDATE chain_runs

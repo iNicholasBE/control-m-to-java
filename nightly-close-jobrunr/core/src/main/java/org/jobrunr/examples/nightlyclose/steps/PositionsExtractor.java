@@ -9,6 +9,7 @@ import javax.sql.DataSource;
 import java.io.BufferedReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.List;
@@ -33,6 +34,10 @@ public class PositionsExtractor {
     public PositionsExtractor(DataSource dataSource, PositionsFiles files) {
         this.dataSource = dataSource;
         this.files = files;
+    }
+
+    public Path positionsFile(ChainRun run) {
+        return files.pathFor(run.businessDate());
     }
 
     /** @return the number of rows loaded */

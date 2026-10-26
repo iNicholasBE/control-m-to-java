@@ -25,7 +25,7 @@ build_impl
 POSITIONS=$(positions_file "$DATE" "$SCALE")
 WORK="$HARNESS/work/$IMPL"
 reset_db
-prepare_workdir "$WORK" "$POSITIONS"
+prepare_workdir "$WORK"
 
 PID=$(start_app "$WORK" "$IMPL_PORT" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}")
 trap 'stop_app "$PID"' EXIT
@@ -46,8 +46,8 @@ STEPS=$(step_seconds "$RUN_ID")
 ROWS=$(( $(wc -l <"$POSITIONS") - 1 ))
 REPORT="$WORK/outbox/REPORT-$DATE-1.csv"
 if [[ "$SAVE_REFERENCE" == 1 ]]; then
-  mkdir -p "$HARNESS/work/reference/$IMPL"
-  cp "$REPORT" "$HARNESS/work/reference/$IMPL/"
+  mkdir -p "$HARNESS/work/reference/$IMPL/${SCALE}x"
+  cp "$REPORT" "$HARNESS/work/reference/$IMPL/${SCALE}x/"
 fi
 
 CSV="$RESULTS_DIR/windows.csv"

@@ -21,6 +21,7 @@ import java.util.Objects;
  *     <li>Same id, different parameters (a different input file): conflict, the existing run is returned with a reason.</li>
  *     <li>A new run number is an explicit rerun and gets a new id.</li>
  *     <li>A trigger for a run that is already done writes the bridge's DONE file again.</li>
+ *     <li>A run is launched once its positions file is complete; until then it waits in SUBMITTED.</li>
  * </ul>
  */
 @Service
@@ -59,9 +60,10 @@ public class EnqueueContract {
                     + run.inputSha256() + ", the positions file now has sha256 " + inputSha256 + ". Submit runNumber "
                     + (runNumber + 1) + " for an explicit rerun.");
         }
+        // A run waits in SUBMITTED until its positions file is complete; the inbox watcher launches it then.
         // Launching again is safe while the run is still SUBMITTED: the job ids are deterministic and the
         // scheduler ignores ids it already has. It covers a crash between inserting the row and creating the jobs.
-        if (run.state() == RunState.SUBMITTED) {
+        if (run.state() == RunState.SUBMITTED && positionsFiles.isComplete(businessDate)) {
             launcher.launch(run);
             run = runs.get(runId);
         }

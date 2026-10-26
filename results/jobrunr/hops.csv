@@ -1,4 +1,5 @@
 impl,scale,run_at_utc,label,watcher_to_extract_s,extract_to_scoring_s,scoring_to_aggregate_s,aggregate_to_report_s,report_to_deliver_s,deliver_to_done_s,listen_connections
-jobrunr-pro,1,2026-10-26T19:20:28Z,pro per-step,1.03,11.03,5.90,0.15,5.00,4.98,1
-jobrunr-pro,1,2026-10-26T19:21:44Z,pro grouped,0.00,12.42,5.70,0.00,0.00,0.00,1
-jobrunr-oss,1,2026-10-26T19:29:26Z,reference for kill tests,0.00,0.07,9.85,0.00,0.00,0.00,0
+jobrunr-oss,1,2026-10-26T21:08:45Z,run1,0.06,0.04,0.01,0.00,0.00,0.00,0
+jobrunr-pro,1,2026-10-26T21:09:43Z,run1,0.01,5.77,5.89,0.00,0.00,0.00,1
+jobrunr-oss,1,2026-10-26T21:11:40Z,run2,0.06,0.03,0.01,0.00,0.00,0.00,0
+jobrunr-pro,1,2026-10-26T21:12:36Z,run2,0.01,8.56,5.89,0.00,0.00,0.00,1

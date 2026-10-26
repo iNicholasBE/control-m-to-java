@@ -10,12 +10,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+/** The inbox of {@code POSITIONS-<businessDate>.csv} files. */
 @Component
 public class PositionsFiles {
+
+    private static final Pattern NAME = Pattern.compile("POSITIONS-(\\d{4}-\\d{2}-\\d{2})\\.csv");
+    /** A file whose size did not change for this long is complete, like a Control-M file watcher's minimum age. */
+    private static final Duration STABLE_FOR = Duration.ofSeconds(1);
 
     private final NightlyCloseProperties properties;
 
@@ -25,6 +35,27 @@ public class PositionsFiles {
 
     public Path pathFor(LocalDate businessDate) {
         return properties.inboxDir().resolve("POSITIONS-" + businessDate + ".csv");
+    }
+
+    /** Business dates that have a positions file in the inbox, complete or not. */
+    public List<LocalDate> datesInInbox() throws IOException {
+        if (!Files.isDirectory(properties.inboxDir())) return List.of();
+        try (var files = Files.list(properties.inboxDir())) {
+            return files.map(f -> NAME.matcher(f.getFileName().toString()))
+                    .filter(Matcher::matches)
+                    .map(m -> LocalDate.parse(m.group(1)))
+                    .sorted()
+                    .toList();
+        }
+    }
+
+    public boolean isComplete(LocalDate businessDate) {
+        Path file = pathFor(businessDate);
+        try {
+            return Files.exists(file) && Files.getLastModifiedTime(file).toInstant().isBefore(Instant.now().minus(STABLE_FOR));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     public Optional<String> sha256IfPresent(LocalDate businessDate) {

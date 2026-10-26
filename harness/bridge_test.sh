@@ -18,12 +18,13 @@ build_impl
 POSITIONS=$(positions_file "$DATE" 1)
 WORK="$HARNESS/work/$IMPL-bridge"
 reset_db
-prepare_workdir "$WORK" "$POSITIONS"
+prepare_workdir "$WORK"
 PID=$(start_app "$WORK" "$IMPL_PORT")
 trap 'stop_app "$PID"' EXIT
 wait_ready "$IMPL_PORT" "$PID"
 
 RUN_AT=$(iso_now)
+drop_positions "$WORK" "$POSITIONS"   # the file arrives; the simulator then plays the mainframe's bridge signals
 REPORT="$WORK/bridge-report.json"
 TRANSPORT_ARGS=(--status-url "http://localhost:$IMPL_PORT")
 [[ "$TRANSPORT" == rest ]] && TRANSPORT_ARGS=(--rest "http://localhost:$IMPL_PORT")

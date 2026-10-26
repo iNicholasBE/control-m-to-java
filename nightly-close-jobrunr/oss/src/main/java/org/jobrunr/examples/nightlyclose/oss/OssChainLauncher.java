@@ -9,10 +9,9 @@ import org.jobrunr.scheduling.JobScheduler;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.util.UUID;
 
 /**
- * Starts a run by enqueueing its head job under the run id. JobRunr ignores a job whose id it already has,
+ * Starts a run by enqueueing its one durable job under the run id. JobRunr ignores a job whose id it already has,
  * so launching twice (after a crash between the two lines below) still runs the chain once.
  */
 @Component
@@ -28,10 +27,9 @@ class OssChainLauncher implements ChainLauncher {
 
     @Override
     public void launch(ChainRun run) {
-        UUID runId = run.runId();
         LocalDate businessDate = run.businessDate();
         int runNumber = run.runNumber();
-        jobScheduler.<OssChainJobs>enqueue(runId, jobs -> jobs.head(runId, businessDate, runNumber, JobContext.Null));
-        runs.advance(runId, RunState.SUBMITTED, RunState.LAUNCHED);
+        jobScheduler.<NightlyCloseJob>enqueue(run.runId(), job -> job.run(businessDate, runNumber, JobContext.Null));
+        runs.advance(run.runId(), RunState.SUBMITTED, RunState.LAUNCHED);
     }
 }

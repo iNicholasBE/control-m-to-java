@@ -8,6 +8,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Set;
 import java.util.SplittableRandom;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -39,6 +40,11 @@ public class RiskScorer {
         return IntStream.range(0, portfolios.size())
                 .mapToObj(i -> new Partition(i + 1, portfolios.get(i)))
                 .toList();
+    }
+
+    /** Partitions that committed their scores in an earlier attempt of this run. */
+    public Set<Integer> finishedPartitions(UUID runId) {
+        return Set.copyOf(jdbc.sql("SELECT partition FROM partition_progress WHERE run_id = ?").param(runId).query(Integer.class).list());
     }
 
     /** @return the number of positions scored */

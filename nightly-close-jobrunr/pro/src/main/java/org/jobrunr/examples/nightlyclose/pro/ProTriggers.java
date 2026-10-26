@@ -1,10 +1,8 @@
 package org.jobrunr.examples.nightlyclose.pro;
 
 import org.jobrunr.examples.nightlyclose.NightlyCloseProperties;
-import org.jobrunr.examples.nightlyclose.bridge.BridgeFileWatcher;
+import org.jobrunr.examples.nightlyclose.bridge.InboxWatcher;
 import org.jobrunr.examples.nightlyclose.calendar.NightlyTrigger;
-import org.jobrunr.jobs.annotations.Job;
-import org.jobrunr.jobs.annotations.Recurring;
 import org.jobrunr.jobs.context.JobContext;
 import org.jobrunr.scheduling.JobScheduler;
 import org.slf4j.Logger;
@@ -14,7 +12,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 
@@ -25,18 +22,21 @@ public class ProTriggers {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProTriggers.class);
     private static final String TRIGGER_ID = "nightly-close-trigger";
+    private static final String WATCHER_ID = "inbox-watcher";
+    /** Every 15 seconds, on business days only. */
+    private static final String WATCHER_CRON = "*/15 * * * * *";
 
     private final JobScheduler jobScheduler;
     private final NightlyTrigger trigger;
-    private final BridgeFileWatcher bridge;
+    private final InboxWatcher inbox;
     private final NightlyCloseProperties properties;
     private final String cron;
 
-    public ProTriggers(JobScheduler jobScheduler, NightlyTrigger trigger, BridgeFileWatcher bridge,
+    public ProTriggers(JobScheduler jobScheduler, NightlyTrigger trigger, InboxWatcher inbox,
                        NightlyCloseProperties properties, @Value("${nightly-close.trigger.cron}") String cron) {
         this.jobScheduler = jobScheduler;
         this.trigger = trigger;
-        this.bridge = bridge;
+        this.inbox = inbox;
         this.properties = properties;
         this.cron = cron;
     }
@@ -46,7 +46,14 @@ public class ProTriggers {
      * the missed run once a server is back ({@code withScheduleJobsSkippedDuringDowntime}); OSS silently skips it.
      */
     @EventListener(ApplicationReadyEvent.class)
-    public void registerNightlyTrigger() {
+    public void registerRecurringJobs() {
+        // Step 1, the file watcher, plus the bridge's READY files, on the same business-day calendar.
+        jobScheduler.createRecurrently(aRecurringJob()
+                .withId(WATCHER_ID)
+                .withName("Inbox watcher: positions files and READY files")
+                .withCustomSchedule(BusinessDaySchedule.definition(WATCHER_CRON, properties.holidaysFile()))
+                .withZoneId(ZoneOffset.UTC)
+                .<ProTriggers>withJobLambda(triggers -> triggers.scanInbox()));
         if ("-".equals(cron)) {
             jobScheduler.deleteRecurringJob(TRIGGER_ID);
             return;
@@ -70,9 +77,7 @@ public class ProTriggers {
         jobContext.runStepOnce("submit", () -> trigger.submit(LocalDate.parse(businessDate)));
     }
 
-    @Recurring(id = "bridge-file-watcher", interval = "PT5S")
-    @Job(name = "Control-M bridge: scan for READY files")
-    public void scanBridgeInbox() throws IOException {
-        bridge.scanInbox();
+    public void scanInbox() throws Exception {
+        inbox.scan();
     }
 }

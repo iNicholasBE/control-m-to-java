@@ -20,7 +20,6 @@ public record NightlyCloseProperties(
         @DefaultValue("./bridge/inbox") Path bridgeInboxDir,
         @DefaultValue("./bridge/outbox") Path bridgeOutboxDir,
         @DefaultValue("./holidays.txt") Path holidaysFile,
-        @DefaultValue("PT6H") Duration watcherTimeout,
         @DefaultValue("06:00") LocalTime slaTime,
         @DefaultValue("Europe/Brussels") ZoneId slaZone,
         URI regulatorUrl,

@@ -3,7 +3,8 @@
 #
 #   ./connections.sh <impl>
 #
-# jobrunr-pro runs twice: fixed-size workers (20) and SelfLearningWorkerCapacityPolicy with the PrefetchQueue.
+# jobrunr-pro runs twice: fixed-size workers (20, the default) and SelfLearningWorkerCapacityPolicy (at most 20)
+# with the PrefetchQueue.
 # Other implementations run once with their default configuration.
 # Writes every sample to <results>/connections.csv and one line per run to <results>/connections-summary.csv.
 source "$(dirname "$0")/lib.sh"
@@ -44,13 +45,12 @@ sampled_run() {  # sampled_run <variant> [app args...]
 
 build_impl
 if [[ "$IMPL" == "jobrunr-pro" ]]; then
-  sampled_run "fixed-size-20" \
-    --jobrunr.background-job-server.worker-capacity-policy=fixed-size \
-    --jobrunr.background-job-server.worker-count=20 \
-    --jobrunr.background-job-server.work-distribution-strategy=basic
-  sampled_run "self-learning+prefetch-queue"
-elif [[ "$IMPL" == "jobrunr-oss" ]]; then
   sampled_run "fixed-size-20"
+  sampled_run "self-learning+prefetch-queue" \
+    --jobrunr.background-job-server.worker-capacity-policy=self-learning \
+    --jobrunr.background-job-server.work-distribution-strategy=prefetch-queue
+elif [[ "$IMPL" == "jobrunr-oss" ]]; then
+  sampled_run "4 workers, 20 partition threads"
 else
   sampled_run "default"
 fi

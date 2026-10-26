@@ -1,18 +1,20 @@
 # Results: nightly close on JobRunr
 
-Every number in this folder comes from the harness in `harness/`, run against the modules in `nightly-close-jobrunr/`. This page says what ran, on what, when, and with which command. Whatever did not run is listed under "Not run".
+Every number in this folder comes from the harness in `harness/`, run against the modules in `nightly-close-jobrunr/` in their current shape: OSS as one durable job, Pro as one batch workflow with a durable continuation (see `nightly-close-jobrunr/README.md`). All CSVs from earlier shapes (per-step jobs, polling join, `chain-shape` switch) were deleted before these runs. Whatever did not run is listed under "Not run".
 
 ## Machine and versions
 
 | | |
 |---|---|
-| Date | 2026-10-26 (all runs, times in the CSVs are UTC) |
-| Hardware | Apple M4 Pro, 14 cores, 48 GB RAM (`sysctl -n machdep.cpu.brand_string`, `hw.ncpu`, `hw.memsize` = 51539607552) |
+| Date | 2026-10-26, between 21:08 and 22:00 UTC (times in the CSVs are UTC) |
+| Hardware | Apple M4 Pro, 14 cores, 48 GB RAM |
 | OS | macOS 26.6.2 |
-| JDK | Azul Zulu 25.0.3 (`25.0.3+9-LTS`), app heap `-Xmx2g` |
-| Database | PostgreSQL 16.15 in Docker (Docker Desktop 27.5.1), `harness/docker-compose.yml`, host port 5440, `max_connections=300`, `shared_buffers=512MB` |
+| JDK | Azul Zulu 25.0.3, app heap `-Xmx2g` |
+| Database | PostgreSQL 16.15 in Docker (Docker Desktop 27.5.1), `harness/docker-compose.yml`, host port 5440 |
 | JobRunr | OSS 9.0.2, Pro 9.0.2, Spring Boot 4.0.9 |
-| Data | `harness/gen_positions.py --seed 42`: 200,000 rows (1x, 113 MB) for business date 2026-10-23, 40 columns, 20 portfolios of uneven size |
+| Data | `harness/gen_positions.py --seed 42`: 200,000 rows (1x, 113 MB) for business date 2026-10-23, 20 portfolios of uneven size |
+| Config | Poll interval 5 s on both. OSS: 4 workers, 20 partitions on virtual threads behind a semaphore of 20. Pro: fixed 20 workers, concurrent rate limiter `database-heavy=20` on the child jobs, `PostgresEventTransport` (auto-selected) |
+| Watcher | Recurring job every 15 s (OSS `@Recurring(interval = "PT15S")`, Pro 15-second cron on the business-day calendar) |
 
 App and database ran on the same laptop. These numbers compare designs on one machine; they are not a capacity benchmark.
 
@@ -20,102 +22,121 @@ App and database ran on the same laptop. These numbers compare designs on one ma
 
 | File | Written by | One row per |
 |---|---|---|
-| `kill-tests.csv` | `harness/kill_test.sh` | kill test |
 | `windows.csv` | `harness/run_chain.sh` | clean run |
-| `connections.csv`, `connections-summary.csv` | `harness/connections.sh` | sample (1 s), run |
-| `rolling-restart.csv` | `harness/rolling_restart.sh` | rolling restart run |
-| `dst.md` | `DstTest` in `nightly-close-jobrunr/oss` | |
+| `hops.csv` | `harness/run_chain.sh` | clean run: the gap between one step's end and the next step's start, plus `listen_connections` (sessions in `pg_stat_activity` whose query starts with `LISTEN`) |
+| `kill-tests.csv` | `harness/kill_test.sh` | kill test |
+| `bridge.csv` | `harness/bridge_test.sh` | bridge simulator run |
+| `dst.md` | `DstTest` in `nightly-close-jobrunr/oss` (older, unchanged by the reshape) | |
+
+### windows.csv columns
+
+`window_s` is from dropping the READY file in `bridge/inbox/` to the DONE file in `bridge/outbox/`, so it includes up to 15 s of waiting for the next watcher tick. `chain_s` is from the run's submit to its finish in `chain_runs`, which is the number to compare. The per-step columns come from `step_executions`; `scoring_s` is first partition start to last partition end, `join_gap_s` is last partition end to aggregate start.
+
+### hops.csv columns
+
+`extract_to_scoring_s` is extract end to first partition start (Pro: hand-off 1, batch method done to first child running). `scoring_to_aggregate_s` is last partition end to aggregate start (Pro: hand-off 2, last child done to `finish` running).
 
 ### kill-tests.csv columns
 
 | Column | Meaning |
 |---|---|
-| `kill_point` | The marker the JVM was killed at (`kill -9`), see the module README |
+| `kill_point` | The marker the JVM was killed at (`kill -9`) |
 | `killed_at_marker` | `yes` when the marker appeared and the kill was sent while the app paused there |
-| `resume_s` | From starting the new JVM to the `DONE` file: detection of the dead job, retry back-off and the rest of the chain |
-| `total_s` | From the trigger to the `DONE` file |
-| `steps_with_more_than_one_attempt` | `step:count` for every step with more than one row in `step_executions`. The killed step itself always shows up here: it never finished, so it must run again |
-| `completed_steps_rerun` | Steps that had **finished successfully** and still ran again. This is the number that matters |
-| `interrupted_steps` | Steps with a row whose `outcome` is NULL: the step the JVM died in |
-| `chain_runs_for_date` | Must be 1: the restart must not start a second run |
+| `resume_s` | From starting the new JVM to the DONE file: detection of the dead job, retry back-off and the rest of the chain |
+| `total_s` | From the trigger to the DONE file |
+| `steps_with_more_than_one_attempt` | `step:count` for every step with more than one row in `step_executions`. The killed step itself always shows up: it never finished |
+| `completed_steps_rerun` | Steps that had **finished successfully** before the kill and still ran again. The number that matters |
+| `interrupted_steps` | Steps with a row whose `outcome` is NULL: the step(s) the JVM died in |
+| `chain_runs_for_date` | Must be 1 |
 | `deliveries_accepted` | Rows in the regulator stub's `deliveries`. Must be 1 |
 | `duplicate_deliveries_rejected` | Delivery attempts the stub rejected on the idempotency key's UNIQUE index |
 | `report_identical` | `REPORT-<date>-1.csv` byte-identical (`cmp`) to the report of a clean run of the same implementation |
 
 ## What ran
 
-Work stopped at about 18:55 CET because the host disk filled up (0.1 to 1 GB free out of 926 GB). Docker Desktop's VM stalled on writes and every `docker` command hung, Postgres included. See "Not run".
-
-### 1. Clean run, OSS, 1x (smoke run, row not kept in `windows.csv`)
+### 1. Clean runs, 1x, file transport (`windows.csv`, `hops.csv`)
 
 ```bash
-cd harness && NO_BUILD=1 ./run_chain.sh jobrunr-oss 2026-10-23 --label smoke --save-reference
+cd harness && NO_BUILD=1 ./run_chain.sh jobrunr-oss 2026-10-23 --label run1 --save-reference
+NO_BUILD=1 ./run_chain.sh jobrunr-pro 2026-10-23 --label run1 --save-reference
+NO_BUILD=1 ./run_chain.sh jobrunr-oss 2026-10-23 --label run2
+NO_BUILD=1 ./run_chain.sh jobrunr-pro 2026-10-23 --label run2
 ```
 
-17:25:38 UTC, file transport. Window from dropping the READY file to the DONE file: **16.1 s**. In the database (submitted to finished): 10.1 s. Per step: watcher 0.05 s, extract 1.48 s, scoring (20 partitions) 1.11 s, **join gap 7.25 s**, aggregate 0.06 s, report 0.00 s, deliver 0.03 s. The rest of the window is the bridge watcher's 5 s poll before the run is submitted. Report sha256 `2b6a0d7f6589334343cc6443aab010aa3d0585a3d9c2e19694f1e9332b28cf36`. This report is the reference for the kill tests. `windows.csv` was cleared before the kill-test batch, and the batch stopped before the clean window runs were due.
+| | OSS run 1 | OSS run 2 | Pro run 1 | Pro run 2 |
+|---|---|---|---|---|
+| Window, READY file to DONE file | 20.9 s | 23.0 s | 21.3 s | 31.1 s |
+| Chain, submit to finish | **4.8 s** | **7.0 s** | **19.2 s** | **22.4 s** |
+| Extract | 3.59 s | 3.93 s | 3.27 s | 3.76 s |
+| Hand-off 1: extract end to first partition start | 0.04 s | 0.03 s | **5.77 s** | **8.56 s** |
+| Scoring, 20 partitions | 0.97 s | 2.77 s | 4.11 s | 4.11 s |
+| Hand-off 2: last partition end to aggregate start | 0.01 s | 0.01 s | **5.89 s** | **5.89 s** |
+| Aggregate + report + deliver | 0.10 s | 0.12 s | 0.10 s | 0.07 s |
+| `LISTEN` sessions in `pg_stat_activity` | 0 | 0 | 1 | 1 |
 
-Two manual Pro runs (same data, throwaway database `nightly_pro_smoke`, while the OSS kill tests ran, so the timings are indicative only):
+All four reports have sha256 `2b6a0d7f6589334343cc6443aab010aa3d0585a3d9c2e19694f1e9332b28cf36`. The window differs from the chain time mainly by where the READY file lands in the 15 s watcher cycle.
 
-| Pro chain shape | Submitted to finished | Notes |
-|---|---|---|
-| `per-step` (default) | 41.1 s | Each of the 6 continuations started about 5 s (one poll) after its parent; scoring 4.1 s |
-| `grouped` | 20.9 s | Two continuation hops; extract to first partition 11.6 s (continuation, batch start, rate limiter) |
+**Instant job processing on Pro was active**: one `LISTEN` session per server, the `PostgresEventTransport` that Pro selects on Postgres. It does not remove the two hand-off waits, and this is why. A `JobEnqueuedEvent` goes out when a job becomes ENQUEUED, and then a worker picks it up within milliseconds. The two hand-offs are not enqueues by our code but state moves made by background tasks that run once per poll interval (5 s):
 
-Both produced the same report sha256 as OSS. Scoring took 4.1 s instead of 1.1 s because `SelfLearningWorkerCapacityPolicy` started 4 partitions per second (per-partition start times in the smoke database), not because of the rate limiter.
+- Hand-off 1: the children created inside the batch method wait until the method returns. `ProcessBatchJobsTask` releases them on its next tick, and with the rate limiter `ProcessJobsAwaitingRateLimiterTask` releases them after that (5.8 s and 8.6 s: one or two ticks, depending on the phase).
+- Scoring: the concurrent rate limiter released 4 partitions per second (start times 21:09:54, :55, :56, :57, :58 in run 1, four each). `ProcessJobsAwaitingRateLimiterTask.getJobsToEnqueuePerSecond` spreads the free slots over the seconds of one poll interval (`scheduleAt(runStart + n s)`, slots divided by `getPollInterval().getSeconds()`): 20 slots over 5 s is 4 per second. Read from the 9.0.2 bytecode with `javap`. Without the limiter (`nightly-close.pro.rate-limit-partitions=false`) the 20 children start in the same second; not re-measured in this round.
+- Hand-off 2: the last child succeeds, `ProcessBatchJobsTask` marks the batch succeeded, `ProcessAwaitingJobsTask` moves `finish` from AWAITING to ENQUEUED and publishes the event. 5.89 s in both runs.
 
-### 2. Kill tests, OSS (6 of the planned 30)
+Each of these tasks publishes `JobEnqueuedEvent` after moving the jobs, so the event bus shortens ENQUEUED to PROCESSING, not AWAITING to ENQUEUED. `ProcessBatchJobsTask` does subscribe to `BatchJobEvent` on the bus, but only for pause and resume. At 1x this makes Pro's chain about 15 s slower than OSS's single JVM; the waits are fixed per hand-off and do not grow with the data.
+
+### 2. Kill tests, OSS and Pro, 2 repeats each (`kill-tests.csv`)
 
 ```bash
-cd harness && for kp in watcher extract scoring-partition-3 scoring-partition-17 join aggregate report \
-    deliver-before-call deliver-after-call-before-record recurring-trigger; do
-  NO_BUILD=1 ./kill_test.sh jobrunr-oss $kp 3
+cd harness && for kp in extract scoring-partition-3 aggregate deliver-before-call deliver-after-call-before-record; do
+  for impl in jobrunr-oss jobrunr-pro; do NO_BUILD=1 ./kill_test.sh $impl $kp 2; done
 done
 ```
 
-The batch completed `watcher` x3 and `extract` x3 (rows in `kill-tests.csv`), then hung on `docker compose up` for `scoring-partition-3`. One earlier single run at `deliver-after-call-before-record` is described below; its row was cleared with the CSV before the batch started.
+| Kill point | Impl | Runs | Killed at marker | Resume (restart to DONE) | Completed steps that ran again | Steps interrupted | Deliveries accepted | Duplicate deliveries rejected | Report identical |
+|---|---|---|---|---|---|---|---|---|---|
+| extract | oss | 2 | yes / yes | 34.9 s / 37.6 s | none / none | extract | 1 / 1 | 0 / 0 | 2 of 2 |
+| extract | pro | 2 | yes / yes | 52.8 s / 47.9 s | none / none | extract | 1 / 1 | 0 / 0 | 2 of 2 |
+| scoring-partition-3 | oss | 2 | yes / yes | 35.4 s / 38.1 s | extract / extract | scoring-partition-* (20) | 1 / 1 | 0 / 0 | 2 of 2 |
+| scoring-partition-3 | pro | 2 | yes / yes | 37.9 s / 42.9 s | none / none | scoring-partition-* (4) | 1 / 1 | 0 / 0 | 2 of 2 |
+| aggregate | oss | 2 | yes / yes | 37.1 s / 36.9 s | extract / extract | aggregate | 1 / 1 | 0 / 0 | 2 of 2 |
+| aggregate | pro | 2 | yes / yes | 27.9 s / 27.9 s | none / none | aggregate | 1 / 1 | 0 / 0 | 2 of 2 |
+| deliver-before-call | oss | 2 | yes / yes | 32.8 s / 32.8 s | aggregate report / aggregate report | deliver | 1 / 1 | 0 / 0 | 2 of 2 |
+| deliver-before-call | pro | 2 | yes / yes | 27.8 s / 27.8 s | none / none | deliver | 1 / 1 | 0 / 0 | 2 of 2 |
+| deliver-after-call-before-record | oss | 2 | yes / yes | 36.8 s / 37.0 s | aggregate extract report / aggregate extract report | deliver | 1 / 1 | 1 / 1 | 2 of 2 |
+| deliver-after-call-before-record | pro | 2 | yes / yes | 27.7 s / 27.8 s | none / none | deliver | 1 / 1 | 1 / 1 | 2 of 2 |
 
-| Kill point | Runs | Resume (restart to DONE) | Completed steps that ran again | Duplicate deliveries rejected | Report identical |
-|---|---|---|---|---|---|
-| watcher | 3 | 42.9 / 47.8 / 47.8 s | none | 0 | 3 of 3 |
-| extract | 3 | 49.1 / 44.3 / 48.1 s | `watcher` in 3 of 3 | 0 | 3 of 3 |
-| deliver-after-call-before-record (single run, 17:26 UTC, not in the CSV) | 1 | 32.8 s | `aggregate`, `report` | 1 | yes |
+Every run: one `chain_runs` row, exactly one accepted delivery, and a report byte-identical to the clean run of the same implementation (20 of 20, OSS and Pro).
 
-Every run: one `chain_runs` row and one accepted delivery.
+**Did a completed step rerun on Pro? No, in none of the 10 Pro kill tests.** OSS re-ran completed steps in 8 of its 10: `extract` after kills in scoring, aggregate and deliver-after-call; `aggregate` and `report` after kills in deliver. OSS saves the `runStepOnce` markers with the job on the poll interval, so a step that finished in the last few seconds before the `kill -9` is not marked done yet and runs again on the retry. Pro saves each marker the moment the step ends. Every step is idempotent, so the OSS reruns cost time, not correctness: the reports stayed identical and the regulator accepted one delivery.
 
-What it shows: on OSS, a `kill -9` re-runs steps that had **already finished** inside the same job. `runStepOnce` markers are saved with the job on the poll interval, not when the step ends. The JobRunr durable-execution guide documents this ("JobRunr OSS saves state on its normal poll interval ... a hard crash in the window since the last save can re-run the step that had just finished"). The idempotent steps absorb it: staging and scores are replaced in one transaction, the report is rewritten byte-identically, and the second delivery is rejected on the idempotency key. Resume time is mostly JobRunr noticing the dead server (4 x the 5 s poll interval) plus the retry back-off.
+Notes on the table:
 
-### 3. DST
+- At `scoring-partition-3` the partitions that were running when the JVM died show up as interrupted: all 20 on OSS (they start together on virtual threads), 4 on Pro (the rate limiter had released 4 that second). That is the killed step, not a rerun. On OSS a retry of the score step skips partitions that have a `partition_progress` row; the score step itself is not a row in `step_executions`, so a rerun of a score step whose partitions were all done would not show in this column.
+- At `deliver-after-call-before-record` the regulator had accepted the filing but the receipt was not recorded. The retry called again and the stub rejected the second call on the idempotency key: 1 duplicate rejected, 1 delivery accepted, on both editions. At `deliver-before-call` the call never happened, so 0 duplicates.
+- Resume time is dominated by detecting the dead job (no heartbeat from the killed server) and the retry back-off, not by the chain: 33 to 38 s on OSS, 28 s on Pro once the killed step is past scoring, 38 to 53 s on Pro when the kill hits extract or a partition (the batch and its children each need their own orphan detection and one or two hand-off ticks).
+
+### 3. Bridge, file transport (`bridge.csv`)
 
 ```bash
-cd nightly-close-jobrunr && mvn -B test -pl oss -am -Dtest=DstTest -Dsurefire.failIfNoSpecifiedTests=false
+cd harness && for flags in "--refire-during-run --refire-after-done" "--drop-done-once"; do
+  for impl in jobrunr-oss jobrunr-pro; do NO_BUILD=1 ./bridge_test.sh $impl file $flags; done
+done
 ```
 
-2 tests, both pass. Output in `dst.md`. Finding: JobRunr's own cron with a local `zoneId` does **not** double-fire or skip. On 2026-10-25 it fires once, then waits 25 h. On 2027-03-28 the missing 02:30 becomes 03:30 local, then a 23 h gap. A naive wall-clock scheduler, which the test includes as the reference, does double-fire on 25 October and skips 28 March. The UTC cron fires every 24 h at the same instant.
+| Impl | Simulator flags | READY files sent | Run ids seen | After a lost DONE | Elapsed | Runs | Deliveries | Steps run twice |
+|---|---|---|---|---|---|---|---|---|
+| OSS | `--refire-during-run --refire-after-done` | 3 | 1 | n/a | 32.6 s | 1 | 1 | 0 |
+| Pro | `--refire-during-run --refire-after-done` | 3 | 1 | n/a | 41.9 s | 1 | 1 | 0 |
+| OSS | `--drop-done-once` | 2 | 1 | DONE file re-emitted | 42.1 s | 1 | 1 | 0 |
+| Pro | `--drop-done-once` | 2 | 1 | DONE file re-emitted | 43.0 s | 1 | 1 | 0 |
+
+A READY file re-sent during the run attached to the existing run (deterministic id), one re-sent after DONE got the DONE file again, and when the simulator threw away the first DONE file, its re-sent READY got the DONE file re-emitted without a second run. Simulator exit code 0 in all four.
 
 ## Not run
 
-All of these need Docker and roughly 4 GB of free host disk. The harness now refuses to start below `MIN_FREE_GB` (default 4) and times out hung Docker calls instead of stalling.
-
-| Planned | Command |
-|---|---|
-| OSS kill tests: scoring-partition-3, scoring-partition-17, join, aggregate, report, deliver-before-call, deliver-after-call-before-record, recurring-trigger (3 each) | `./kill_test.sh jobrunr-oss <killPoint> 3` |
-| All Pro kill tests (3 each) | `export JOBRUNR_PRO_LICENSE=...; ./kill_test.sh jobrunr-pro <killPoint> 3` |
-| Clean windows at 1x and 10x, OSS and Pro (`per-step` and `grouped`) | `./run_chain.sh jobrunr-oss 2026-10-23 --scale 1` (and `--scale 10`); for Pro grouped add `-- --nightly-close.pro.chain-shape=grouped` |
-| Connections: OSS fixed 20, Pro fixed 20 against self-learning plus prefetch queue | `./connections.sh jobrunr-oss`, `./connections.sh jobrunr-pro` |
-| Rolling restart, OSS and Pro | `./rolling_restart.sh jobrunr-oss`, `./rolling_restart.sh jobrunr-pro` |
-
-The 10x file (2,000,000 rows, about 1.1 GB) was never written: the generator was killed when the disk filled. `gen_positions.py` produced 200,000 rows in 2.7 s, so 10x takes about 30 s.
-
-## Running the harness
-
-```bash
-cd harness
-docker compose up -d --wait                 # Postgres 16 on localhost:5440
-./run_chain.sh jobrunr-oss 2026-10-23 --scale 1 [--transport file|rest] [--save-reference]
-./kill_test.sh jobrunr-oss extract 3
-./rolling_restart.sh jobrunr-oss [--scale 10]
-./connections.sh jobrunr-pro
-```
-
-`impls/<impl>.conf` tells the harness how to build and start an implementation (`jobrunr-oss`, `jobrunr-pro`, `springbatch`). `NO_BUILD=1` skips the Maven build. The app runs with `harness/work/<impl>/` as its working directory, positions files are generated once into `harness/data/` and hard-linked in. The harness only stops processes it started itself (by pid) and refuses to start when a port is taken.
-
+- 10x data (2,000,000 rows) windows, for either edition.
+- Kill points `watcher`, `scoring-partition-17`, `join`, `report`, `recurring-trigger`; and more than 2 repeats per kill point.
+- Pro with `worker-capacity-policy=self-learning` (configurable, not measured), and Pro without the rate limiter (`rate-limit-partitions=false`) in this round.
+- `connections.sh` and `rolling_restart.sh` (their earlier CSVs were from the old shape and are gone).
+- Bridge REST transport (`bridge_test.sh <impl> rest`).
+- Multi-server Pro (two JVMs sharing the batch); everything here is one app instance.
