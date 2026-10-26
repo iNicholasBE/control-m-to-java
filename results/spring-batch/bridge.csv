@@ -1,0 +1,5 @@
+transport,scenario,rows,simulator_exit_code,triggers_sent,run_ids_seen,batch_job_instances,batch_job_executions,deliveries_accepted,duplicate_deliveries_rejected,done_file_present_at_end,simulator_report
+file,refire-during-run+refire-after-done,2000000,0,3,NIGHTLY-CLOSE-2026-10-27-1,1,1,1,0,True,work/bridge/sim-file-refire-during-run+refire-after-done.json
+file,drop-done-once,2000000,0,2,NIGHTLY-CLOSE-2026-10-27-1,1,1,1,0,True,work/bridge/sim-file-drop-done-once.json
+rest,refire-during-run+refire-after-done,2000000,0,3,NIGHTLY-CLOSE-2026-10-27-1,1,1,1,0,True,work/bridge/sim-rest-refire-during-run+refire-after-done.json
+rest,drop-done-once,2000000,0,2,NIGHTLY-CLOSE-2026-10-27-1,1,1,1,0,True,work/bridge/sim-rest-drop-done-once.json

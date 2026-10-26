@@ -49,7 +49,11 @@ public class ChainFinisher {
         }
     }
 
-    private void writeDoneFile(ChainRun run) throws IOException {
+    /**
+     * The bridge's completion signal. Also written again when a trigger arrives for a run that is already done:
+     * the mainframe re-sends READY when it never saw DONE, and it must get its answer the same way.
+     */
+    public void writeDoneFile(ChainRun run) throws IOException {
         Files.createDirectories(properties.bridgeOutboxDir());
         Path done = properties.bridgeOutboxDir().resolve("NIGHTLY-CLOSE-" + run.businessDate() + "-DONE");
         Path partial = done.resolveSibling(done.getFileName() + ".part");

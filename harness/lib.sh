@@ -32,7 +32,7 @@ with_timeout() {
   local watchdog=$!
   local rc=0
   wait "$pid" || rc=$?
-  kill "$watchdog" 2>/dev/null || true
+  { kill "$watchdog" && wait "$watchdog"; } 2>/dev/null || true
   return "$rc"
 }
 
@@ -155,3 +155,17 @@ step_seconds() {
 value_of() { awk -F, -v k="$2" '$1 == k { print $2 }' <<<"$1"; }
 
 postgres_version() { psql_db postgres "SHOW server_version" | awk '{print $1}'; }
+
+# hop_seconds <runId>: the wait between one step ending and the next starting, in flow order.
+hop_seconds() {
+  sql "WITH s AS (
+         SELECT CASE WHEN step LIKE 'scoring-partition-%' THEN 'scoring' ELSE step END AS step,
+                min(started_at) AS started, max(finished_at) AS finished
+           FROM step_executions WHERE run_id = '$1' GROUP BY 1),
+       g AS (SELECT step, started, finished FROM s UNION ALL
+             SELECT 'done', finished_at, finished_at FROM chain_runs WHERE run_id = '$1')
+       SELECT string_agg(coalesce(round(extract(epoch FROM b.started - a.finished)::numeric, 2)::text, ''), ',' ORDER BY o.n)
+         FROM (VALUES (1, 'watcher', 'extract'), (2, 'extract', 'scoring'), (3, 'scoring', 'aggregate'),
+                      (4, 'aggregate', 'report'), (5, 'report', 'deliver'), (6, 'deliver', 'done')) o(n, f, t)
+         LEFT JOIN g a ON a.step = o.f LEFT JOIN g b ON b.step = o.t"
+}

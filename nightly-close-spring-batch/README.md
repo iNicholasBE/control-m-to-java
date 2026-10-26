@@ -90,7 +90,14 @@ Contract tables (all in `db/schema-chain.sql`):
   `CHAIN_DELIVER_SLEEP_AFTER_CALL=2000ms`, `CHAIN_DELIVER_SLEEP_BEFORE_CALL=2000ms`.
 - File bridge: every 5 s `./bridge/inbox/NIGHTLY-CLOSE-<businessDate>-READY` is submitted through the same
   `ChainService` (runNumber 1) and moved to `./bridge/inbox/processed/`; on completion
-  `./bridge/outbox/NIGHTLY-CLOSE-<businessDate>-DONE` is written.
+  `./bridge/outbox/NIGHTLY-CLOSE-<businessDate>-DONE` is written. A READY file or POST for a run that is
+  already COMPLETED still gets `200` and writes the DONE file again: the usual reason for such a re-fire is
+  that the first DONE never reached the mainframe.
+
+**Difference from the JobRunr module:** a `businessDate` that is not a business day (a weekend or a date in
+`holidays.txt`) is accepted here and runs like any other date; the JobRunr module rejects it with `400`. The
+business-day calendar only governs the Quartz trigger in this module. Left as is on purpose, documented so the
+shared harness does not count it as a failure.
 
 ## What Spring Batch gives you
 

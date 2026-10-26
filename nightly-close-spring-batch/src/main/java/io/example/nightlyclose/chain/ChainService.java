@@ -27,6 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import io.example.nightlyclose.RunKey;
+import io.example.nightlyclose.bridge.DoneFlags;
 
 /**
  * The enqueue contract. Identity is (businessDate, runNumber) = the identifying JobParameters, so Spring Batch's
@@ -47,9 +48,10 @@ public class ChainService {
     private final InputFiles inputFiles;
     private final Sla sla;
     private final JdbcTemplate jdbc;
+    private final DoneFlags doneFlags;
 
     public ChainService(JobOperator jobOperator, JobRepository jobRepository, Job nightlyClose, ChainRuns chainRuns,
-            InputFiles inputFiles, Sla sla, JdbcTemplate jdbc) {
+            InputFiles inputFiles, Sla sla, JdbcTemplate jdbc, DoneFlags doneFlags) {
         this.jobOperator = jobOperator;
         this.jobRepository = jobRepository;
         this.nightlyClose = nightlyClose;
@@ -57,6 +59,7 @@ public class ChainService {
         this.inputFiles = inputFiles;
         this.sla = sla;
         this.jdbc = jdbc;
+        this.doneFlags = doneFlags;
     }
 
     public Submission submit(RunKey key, String triggerSource) {
@@ -76,7 +79,12 @@ public class ChainService {
         }
         boolean registeredNow = chainRuns.register(key, hash, triggerSource);
         JobExecution last = lastExecution(key);
-        if (last != null && (last.isRunning() || last.getStatus() == BatchStatus.COMPLETED)) {
+        if (last != null && last.getStatus() == BatchStatus.COMPLETED) {
+            // a re-fire after completion usually means the first DONE never reached the mainframe
+            doneFlags.write(key);
+            return new Submission(200, status(key).orElseThrow());
+        }
+        if (last != null && last.isRunning()) {
             return new Submission(200, status(key).orElseThrow());
         }
         try {

@@ -2,11 +2,14 @@ package org.jobrunr.examples.nightlyclose.contract;
 
 import org.jobrunr.examples.nightlyclose.ChainIds;
 import org.jobrunr.examples.nightlyclose.calendar.BusinessCalendar;
+import org.jobrunr.examples.nightlyclose.steps.ChainFinisher;
 import org.jobrunr.examples.nightlyclose.steps.PositionsFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.LocalDate;
 import java.util.Objects;
 
@@ -17,6 +20,7 @@ import java.util.Objects;
  *     <li>Same id, same parameters: nothing new starts, the existing run is returned.</li>
  *     <li>Same id, different parameters (a different input file): conflict, the existing run is returned with a reason.</li>
  *     <li>A new run number is an explicit rerun and gets a new id.</li>
+ *     <li>A trigger for a run that is already done writes the bridge's DONE file again.</li>
  * </ul>
  */
 @Service
@@ -28,12 +32,15 @@ public class EnqueueContract {
     private final ChainLauncher launcher;
     private final PositionsFiles positionsFiles;
     private final BusinessCalendar calendar;
+    private final ChainFinisher finisher;
 
-    public EnqueueContract(ChainRunRepository runs, ChainLauncher launcher, PositionsFiles positionsFiles, BusinessCalendar calendar) {
+    public EnqueueContract(ChainRunRepository runs, ChainLauncher launcher, PositionsFiles positionsFiles,
+                           BusinessCalendar calendar, ChainFinisher finisher) {
         this.runs = runs;
         this.launcher = launcher;
         this.positionsFiles = positionsFiles;
         this.calendar = calendar;
+        this.finisher = finisher;
     }
 
     public Submission submit(LocalDate businessDate, int runNumber) {
@@ -58,8 +65,17 @@ public class EnqueueContract {
             launcher.launch(run);
             run = runs.get(runId);
         }
+        if (run.state() == RunState.DONE) reemitDone(run);
         LOG.info("Enqueue contract: {} run {} for {} ({})", created ? "created" : "existing", runNumber, businessDate, runId);
         return created ? Submission.created(run) : Submission.existing(run);
+    }
+
+    private void reemitDone(ChainRun run) {
+        try {
+            finisher.writeDoneFile(run);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public record Submission(Outcome outcome, ChainRun run, String reason) {

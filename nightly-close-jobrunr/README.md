@@ -80,6 +80,7 @@ The REST endpoint, the bridge file watcher and the recurring trigger all go thro
 | New run | `202 Accepted` | `{"outcome":"CREATED","runId":...,"state":"LAUNCHED"}` |
 | Same id, same parameters | `200 OK` | `{"outcome":"EXISTING",...}` with the existing run; nothing new starts |
 | Same id, different input file | `409 Conflict` | `{"outcome":"CONFLICT","runId":<existing>,"reason":"...Submit runNumber N+1 for an explicit rerun."}` |
+| Same id, run already `DONE` | `200 OK` | As "same parameters", and `bridge/outbox/NIGHTLY-CLOSE-<businessDate>-DONE` is written again |
 | A new `runNumber` | `202 Accepted` | An explicit rerun with its own id |
 | Not a business day, or `runNumber < 1` | `400 Bad Request` | `{"outcome":"REJECTED","reason":...}` |
 
@@ -100,7 +101,7 @@ Run states: `SUBMITTED` (row exists, jobs not created yet), `LAUNCHED`, `RUNNING
 
 A crash between inserting the run row and creating the jobs leaves the run in `SUBMITTED`. The contract launches a `SUBMITTED` run again on the next submit; deterministic job ids make that safe.
 
-**Bridge, file transport.** A recurring job scans `bridge/inbox/` every 5 seconds for `NIGHTLY-CLOSE-<businessDate>-READY`. An optional `runNumber=N` line in the file asks for a rerun. The file goes through the contract and moves to `bridge/inbox/accepted/` or `bridge/inbox/rejected/` (a 409 or 400 also writes `bridge/outbox/NIGHTLY-CLOSE-<businessDate>-REJECTED` with the reason). When the run is done the chain writes `bridge/outbox/NIGHTLY-CLOSE-<businessDate>-DONE` with the run id, run number, report sha256 and delivery receipt. Dropping the same READY file twice is harmless.
+**Bridge, file transport.** A recurring job scans `bridge/inbox/` every 5 seconds for `NIGHTLY-CLOSE-<businessDate>-READY`. An optional `runNumber=N` line in the file asks for a rerun. The file goes through the contract and moves to `bridge/inbox/accepted/` or `bridge/inbox/rejected/` (a 409 or 400 also writes `bridge/outbox/NIGHTLY-CLOSE-<businessDate>-REJECTED` with the reason). When the run is done the chain writes `bridge/outbox/NIGHTLY-CLOSE-<businessDate>-DONE` with the run id, run number, report sha256 and delivery receipt. Dropping the same READY file twice is harmless. A READY file or POST for a run that is already done writes the DONE file again: the mainframe re-sends READY exactly when it never saw DONE, so it gets its answer on the channel it is watching. `bridge-simulator/mainframe_side.py --refire-during-run --refire-after-done --drop-done-once` exercises all three cases (`harness/bridge_test.sh`).
 
 **Bridge, REST transport.** The POST above.
 
@@ -131,6 +132,16 @@ A crash between inserting the run row and creating the jobs leaves the run in `S
 | Business-day cron | Weekday cron in UTC; holidays checked inside the trigger | **[Pro]** `BusinessDaySchedule`, a `CustomSchedule` that skips weekends and `holidays.txt`, so no job is created on a holiday. Missed runs during downtime are caught up (`withScheduleJobsSkippedDuringDowntime`) |
 | Worker count | Fixed at 20 | **[Pro]** `SelfLearningWorkerCapacityPolicy` (`worker-capacity-policy=self-learning`) with the `PrefetchQueue` (`work-distribution-strategy=prefetch-queue`); both are properties |
 | Launch | Insert the run, then enqueue; a crash in between is healed by the next submit | **[Pro]** Transaction plugin: the chain's jobs and the `LAUNCHED` state commit together |
+
+### Why a Pro continuation can wait up to one poll interval
+
+On Postgres, JobRunr Pro 9.0.2 selects the `PostgresEventTransport` (`LISTEN/NOTIFY`) on its own; the harness sees its `LISTEN` session in `pg_stat_activity`. The event fires when a job becomes ENQUEUED, and a server then starts it within milliseconds. Three transitions in this chain happen in background tasks instead, which run every poll interval (5 s, the minimum for SQL storage):
+
+- a continuation (`runAfterSuccessOf`) moving from AWAITING to ENQUEUED after its parent succeeded (`ProcessAwaitingJobsTask`);
+- batch children being released when the batch job's own method has finished, and the batch job succeeding when its children have (`ProcessBatchJobsTask`);
+- rate-limited jobs being released (`ProcessJobsAwaitingRateLimiterTask`).
+
+Short jobs start right after a tick and finish before the next one, so each such hop costs close to a full 5 s. From the job history of one run: extract succeeded at :52.7, the scoring batch was enqueued at :55.0, its children moved to the rate limiter at :00.1 and were enqueued at :05.1. The `grouped` shape has fewer continuations; the rate limiter on the partitions costs one tick on its own. There is no configuration that changes this in 9.0.2.
 
 Month-end chains: any Pro cron can be the base of `BusinessDaySchedule`, for example `Cron.lastBusinessDayOfTheMonth(22, 0)`.
 

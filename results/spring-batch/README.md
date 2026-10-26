@@ -1,7 +1,7 @@
 # Results: nightly close on Spring Batch + Quartz
 
 Module: `nightly-close-spring-batch/` (Spring Boot 4.0.9, Spring Batch 6.0.6, Quartz 2.5.2, PostgreSQL JDBC
-42.7.14). Everything below ran on **2026-10-26 between 17:21 and 17:51 UTC**.
+42.7.14). Everything below ran on **2026-10-26**: the measured runs between 17:21 and 17:51 UTC, `bridge.csv` at about 19:20 UTC.
 
 ## Machine and versions
 
@@ -118,6 +118,30 @@ One row per event: `phase`, `at_s` (seconds since the nodes were started), `deta
   node-b). No other step ran twice. 1 delivery accepted, 0 duplicates rejected. The report is byte-identical
   to a clean single-node run of the same business date.
 
+### `bridge.csv`
+
+```
+PG_CONTAINER=control-m-to-java-postgres-1 PG_USER=nightly PG_PASSWORD=nightly PG_PORT=5440 \
+    python3 scripts/bridge_runs.py --out ../results/spring-batch/bridge.csv
+```
+
+Ran at about 19:20 UTC against the **shared harness Postgres** (`harness/docker-compose.yml`, port 5440), 10x
+input, business date 2026-10-27. Each row: clean database, one app instance, then
+`bridge-simulator/mainframe_side.py` with the given flags over the file transport (`--inbox`) or `--rest`;
+`simulator_exit_code`, `triggers_sent`, `run_ids_seen` come from its `--json-report` (kept in
+`nightly-close-spring-batch/work/bridge/sim-*.json`), the counts from the database afterwards.
+
+| Transport | Flags | Exit | Triggers | Job instances / executions | Deliveries / duplicates rejected |
+|---|---|---|---|---|---|
+| file | `--refire-during-run --refire-after-done` | 0 | 3 | 1 / 1 | 1 / 0 |
+| file | `--drop-done-once` | 0 | 2 | 1 / 1 | 1 / 0 |
+| rest | `--refire-during-run --refire-after-done` | 0 | 3 (202, 200 STARTED, 200 COMPLETED) | 1 / 1 | 1 / 0 |
+| rest | `--drop-done-once` | 0 | 2 (202, 200 COMPLETED) | 1 / 1 | 1 / 0 |
+
+With `--drop-done-once` the re-sent trigger is answered with the finished run and the DONE file reappears
+about 1 s later (file: re-drive at 35.0 s, DONE at 36.0 s; REST: 30.2 s, 31.2 s), because a re-fire for a
+COMPLETED run now re-emits DONE.
+
 ### `dst-and-misfire.md`
 
 `mvn test` (11 tests in `src/test/java/io/example/nightlyclose/schedule/`, all passing at 17:50 UTC). The
@@ -126,11 +150,10 @@ local-time vs a UTC cron around 2026-10-25 and 2027-03-28, with what they mean f
 
 ## Not run
 
-- **Contract smoke against the shared harness Postgres** (`harness/docker-compose.yml`, port 5440). Started at
-  about 17:36 UTC with `PG_CONTAINER=control-m-to-java-postgres-1 PG_USER=nightly PG_PASSWORD=nightly PG_PORT=5440`;
-  that server stopped accepting connections during the run and the Docker daemon then stopped responding,
-  so it did not finish. The module defaults to that server (`application.yml`); every measured run above used
-  the module's own container with the same image and settings.
+- **Contract smoke, window, kill and rolling-restart runs against the shared harness Postgres.** A contract
+  smoke run started at about 17:36 UTC on port 5440 failed when that server stopped accepting connections and
+  the Docker daemon hung; it was not repeated. Only `bridge.csv` ran on the shared server (after Docker came
+  back). The module defaults to that server (`application.yml`).
 - **Kill tests at 10x.** Only 1x was killed. At 1x the tasklet steps are tens of milliseconds, so kills
   "at" aggregate and report land at their start.
 - **The shared harness's kill-test runner**: it did not exist while this ran; `scripts/kill_tests.py` follows

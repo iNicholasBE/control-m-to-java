@@ -1,7 +1,5 @@
 package io.example.nightlyclose.chain;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
@@ -12,7 +10,7 @@ import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.listener.JobExecutionListener;
 import org.springframework.stereotype.Component;
 
-import io.example.nightlyclose.ChainProperties;
+import io.example.nightlyclose.bridge.DoneFlags;
 import io.example.nightlyclose.RunKey;
 import io.example.nightlyclose.recovery.NodeIdentity;
 
@@ -26,15 +24,15 @@ public class ChainJobListener implements JobExecutionListener {
     private final NodeIdentity node;
     private final DatasetMutex mutex;
     private final Sla sla;
-    private final ChainProperties properties;
+    private final DoneFlags doneFlags;
 
     public ChainJobListener(ChainRuns chainRuns, NodeIdentity node, DatasetMutex mutex, Sla sla,
-            ChainProperties properties) {
+            DoneFlags doneFlags) {
         this.chainRuns = chainRuns;
         this.node = node;
         this.mutex = mutex;
         this.sla = sla;
-        this.properties = properties;
+        this.doneFlags = doneFlags;
     }
 
     @Override
@@ -54,17 +52,7 @@ public class ChainJobListener implements JobExecutionListener {
             Instant finished = jobExecution.getEndTime() == null ? Instant.now()
                     : jobExecution.getEndTime().toInstant(ZoneOffset.UTC);
             sla.logOutcome(key, finished);
-            writeDoneFile(key);
-        }
-    }
-
-    private void writeDoneFile(RunKey key) {
-        try {
-            Files.createDirectories(properties.bridge().outbox());
-            Files.writeString(properties.bridge().outbox().resolve("NIGHTLY-CLOSE-" + key.businessDate() + "-DONE"),
-                    key.runId() + "\n");
-        } catch (IOException e) {
-            log.error("{}: could not write bridge DONE file", key.runId(), e);
+            doneFlags.write(key);
         }
     }
 }
