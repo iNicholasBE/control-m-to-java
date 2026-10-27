@@ -143,6 +143,8 @@ Same machine and versions. `--portfolios 10000` puts the 200,000 rows in 10,000 
 | Spring Batch | 33.7 s / 38.8 s (22.4 s creating 10,000 step executions before the first partition) |
 | OSS | 5.1 s / 4.9 s |
 
+The probe also ran with `PROBE_WORK=file` (17:14 to 17:20 UTC): each child reads its own file, adds 1 and writes it back, about 1 to 1.5 ms of work. Totals were the same as the no-op probe within the tick phase (20 children: 13.0 to 20.0 s; 10,000 rate-limited: 37.7 to 38.6 s), and every file ended at exactly n + 1 (10,000 of 10,000). Columns `work`, `child_avg_ms`, `files_incremented_once` in `handoff-probe.csv`; the rows from before this mode have `work=none` and empty values.
+
 The `exp-A` and `exp-B` rows (and each pair of `exp-C` and `exp-D` rows) in `windows.csv` and `hops.csv` have identical numbers in every column, so they are probably one measurement recorded twice. The 20-partition rate-limiter-off case was re-measured as `20-children no rate limiter 1/2`: chain 15.1 s and 14.7 s, hand-off 1 3.5 to 3.7 s, hand-off 2 8.9 s.
 
 ## Not run

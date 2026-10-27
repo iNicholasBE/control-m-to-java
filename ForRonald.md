@@ -42,11 +42,26 @@ Config ([`application.properties`](nightly-close-jobrunr/pro/src/main/resources/
 | 5 s | 10,000 | yes | 7.90 | 24.27 | 1.56 | 4.17 | 0.00 | **38.4** |
 | 5 s | 10,000 | no | 3.93 | 7.95 | 2.09 | 3.62 | 0.01 | **17.9** |
 
-No job in these runs does any work, so every second in this table is JobRunr waiting. Three things stand out:
+No job in this table does any work, so every second in this table is JobRunr waiting. Three things stand out:
 
 1. **The continuation always waits one full tick.** "Batch SUCCEEDED → continuation ENQUEUED" is 4.98 to 4.99 s at a 5 s poll and 14.98 s at a 15 s poll. Once it is ENQUEUED, it starts in under 10 ms, so the event transport works for the ENQUEUED → PROCESSING step but not for AWAITING → ENQUEUED.
 2. **Batch completion can be a second full tick.** Without the rate limiter, "last child ends → batch SUCCEEDED" was exactly one tick too (5.00 s, 15.00 s), so last child → continuation was two ticks: 9.99 s at 5 s and 29.99 s at 15 s.
 3. **The children of a batch wait for the batch task, then for the rate limiter.** Children created inside the batch method start 3 to 14 s after the method returns, and 8 to 25 s with the rate limiter.
+
+### The same, with a little real work in every child
+
+To rule out "it only looks like this because the jobs are empty", the probe has a second mode, `work=file`. Before the batch is submitted, it writes one file per child, `probe-files/<probeId>/<n>.txt`, containing `n`. Child `n` opens its own file, reads the number, adds 1 and writes it back (temp file plus atomic move). No two children touch the same file, so they never wait for each other. When the run is done, the probe checks that every file contains exactly `n + 1`, so this also shows that every child ran exactly once.
+
+Total, submit → continuation starts, in seconds. Two runs of each, the no-op and file runs alternating in the same hour, 5 s poll:
+
+| Children | Rate limiter | No-op children | File work (about 1 to 1.5 ms a child) | Files at exactly n + 1 |
+|---|---|---|---|---|
+| 20 | yes | 19.9 / 19.9 | 20.0 / 19.9 | 20 of 20, both runs |
+| 20 | no | 13.0 / 13.2 | 13.0 / 13.0 | 20 of 20, both runs |
+| 10,000 | yes | 38.4 / 38.6 | 37.8 / 37.7 | 10,000 of 10,000, both runs |
+| 10,000 | no | 17.9 / 13.1 | 12.2 / 12.1 | 10,000 of 10,000, both runs |
+
+The work makes no measurable difference, because the waits do not depend on it. The continuation still waits one tick after the batch succeeds (3.5 to 5.0 s), and the rate limiter still needs 24.3 to 24.4 s to start 10,000 children with or without work. The spread in the 10,000-without-limiter row (12 to 18 s) is the phase of the poll ticks, not the work: the no-op run is both the fastest and the slowest of that row.
 
 ### The rate limiter at 10,000 children
 
@@ -128,6 +143,9 @@ cd harness && docker compose up -d --wait               # Postgres 16 on localho
 # builds the Pro module, starts it on port 8282 against database nightly_jobrunr_probe, runs 4 probes
 ./handoff_probe.sh 20 true 20 false 10000 true 10000 false
 
+# the same, with a little real work per child: each reads its own file, adds 1, writes it back
+NO_BUILD=1 PROBE_WORK=file ./handoff_probe.sh 20 true 20 false 10000 true 10000 false
+
 # the same with a 15 s poll interval: every tick-bound wait triples
 NO_BUILD=1 ./handoff_probe.sh 20 true 20 false -- --jobrunr.background-job-server.poll-interval-in-seconds=15
 ```
@@ -135,7 +153,7 @@ NO_BUILD=1 ./handoff_probe.sh 20 true 20 false -- --jobrunr.background-job-serve
 Each probe prints its timeline as JSON (including `childStartsPerSecond`, the rate limiter's release pattern) and appends a row to `results/jobrunr/handoff-probe.csv`. You can also drive it yourself against a running Pro module:
 
 ```bash
-curl -X POST 'localhost:8282/probe/batch?children=20&rateLimited=true&childMillis=0'   # -> {"probeId": ...}
+curl -X POST 'localhost:8282/probe/batch?children=20&rateLimited=true&work=file'   # work=none|file, childMillis=N adds a sleep
 curl 'localhost:8282/probe/batch/<probeId>'
 ```
 

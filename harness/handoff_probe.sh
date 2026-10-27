@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# The Pro hand-offs without the chain: a batch job with N no-op children plus a runAfterSuccessOf continuation
+# The Pro hand-offs without the chain: a batch job with N children (no-op unless PROBE_WORK=file) plus a runAfterSuccessOf continuation
 # (HandOffProbe in nightly-close-jobrunr/pro). Starts the Pro app on its own database, runs each probe, prints the
 # probe's timeline as JSON, appends one row per probe to results/jobrunr/handoff-probe.csv.
 #
 #   ./handoff_probe.sh <children> <rateLimited true|false> [<children> <rateLimited>]... [-- extra app args]
 #   ./handoff_probe.sh 20 true 20 false 10000 true 10000 false
+#   PROBE_WORK=file ./handoff_probe.sh 10000 true 10000 false   # each child reads its own file, adds 1, writes it back
 #
 # Needs JOBRUNR_PRO_LICENSE. Uses database nightly_jobrunr_probe and port 8282 unless JOBRUNR_DB / IMPL_PORT say otherwise.
 source "$(dirname "$0")/lib.sh"
@@ -31,14 +32,15 @@ wait_ready "$IMPL_PORT" "$PID"
 sleep 6  # let the background job server finish its first poll
 
 CSV="$RESULTS_DIR/handoff-probe.csv"
-[[ -f "$CSV" ]] || echo "run_at_utc,children,rate_limited,poll_interval_s,batch_method_s,handoff1_batch_return_to_first_child_s,first_to_last_child_start_s,last_child_end_to_batch_succeeded_s,batch_succeeded_to_continuation_enqueued_s,continuation_enqueued_to_started_s,handoff2_last_child_end_to_continuation_s,total_s,extra_args" >"$CSV"
+[[ -f "$CSV" ]] || echo "run_at_utc,children,rate_limited,poll_interval_s,batch_method_s,handoff1_batch_return_to_first_child_s,first_to_last_child_start_s,last_child_end_to_batch_succeeded_s,batch_succeeded_to_continuation_enqueued_s,continuation_enqueued_to_started_s,handoff2_last_child_end_to_continuation_s,total_s,extra_args,work,child_avg_ms,files_incremented_once" >"$CSV"
+WORK_MODE="${PROBE_WORK:-none}"
 POLL=$(printf '%s\n' "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" | sed -n 's/^--jobrunr.background-job-server.poll-interval-in-seconds=//p'); POLL="${POLL:-5}"
 
 for probe in "${PROBES[@]}"; do
   children="${probe%%:*}"; limited="${probe##*:}"
   RUN_AT=$(iso_now)
-  id=$(curl -s -X POST "http://localhost:$IMPL_PORT/probe/batch?children=$children&rateLimited=$limited" | python3 -c 'import json,sys; print(json.load(sys.stdin)["probeId"])')
-  log "probe $id: $children children, rate limited $limited"
+  id=$(curl -s -X POST "http://localhost:$IMPL_PORT/probe/batch?children=$children&rateLimited=$limited&work=$WORK_MODE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["probeId"])')
+  log "probe $id: $children children, rate limited $limited, work $WORK_MODE"
   deadline=$(( $(date +%s) + 3600 ))
   until [[ "$(curl -s "http://localhost:$IMPL_PORT/probe/batch/$id" | python3 -c 'import json,sys; print(json.load(sys.stdin)["done"])')" == True ]]; do
     (( $(date +%s) < deadline )) || die "probe $id not done within an hour"
@@ -54,6 +56,8 @@ s = r["seconds"]
 keys = ["batchMethod_createChildren", "handOff1_batchReturnToFirstChildStart", "firstToLastChildStart",
         "lastChildEndToBatchSucceeded", "batchSucceededToContinuationEnqueued", "continuationEnqueuedToStarted",
         "handOff2_lastChildEndToContinuationStart", "total_submitToContinuationStart"]
-print(",".join([run_at, str(r["children"]), limited, poll] + [f"{s[k]:.2f}" if s[k] is not None else "" for k in keys] + [extra]))
+files = r.get("files") or {}
+print(",".join([run_at, str(r["children"]), limited, poll] + [f"{s[k]:.2f}" if s[k] is not None else "" for k in keys] + [extra]
+               + [r["work"], "" if r["childAvgMillis"] is None else str(r["childAvgMillis"]), str(files.get("incrementedOnce", ""))]))
 EOF
 done
