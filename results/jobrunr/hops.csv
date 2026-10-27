@@ -20,3 +20,11 @@ jobrunr-pro,1,2026-10-26T22:59:11Z,buffered-copy-1,0.01,8.08,5.86,0.00,0.00,0.00
 jobrunr-pro,1,2026-10-26T23:00:14Z,buffered-copy-2,0.02,7.86,5.87,0.00,0.00,0.00,1
 jobrunr-pro,1,2026-10-26T23:01:58Z,buffered-copy-pro-1,0.01,7.81,5.88,0.00,0.00,0.00,1
 jobrunr-pro,1,2026-10-26T23:02:56Z,buffered-copy-pro-2,0.01,6.20,5.89,0.00,0.00,0.00,1
+jobrunr-oss,1,2026-10-27T16:12:56Z,10k-partitions,0.07,0.05,0.00,0.00,0.00,0.00,0
+jobrunr-pro,1,2026-10-27T16:42:17Z,10k-children rate-limited,0.01,11.50,5.77,0.00,0.00,0.00,1
+jobrunr-pro,1,2026-10-27T16:45:01Z,10k-children rate-limited run2,0.01,10.92,5.70,0.00,0.00,0.00,1
+jobrunr-pro,1,2026-10-27T16:46:55Z,10k-children no rate limiter,0.02,6.30,7.48,0.00,0.00,0.00,1
+jobrunr-pro,1,2026-10-27T16:48:01Z,10k-children no rate limiter run2,0.02,6.92,9.04,0.00,0.00,0.00,1
+jobrunr-oss,1,2026-10-27T16:49:16Z,10k-partitions run2,0.06,0.05,0.00,0.00,0.00,0.00,0
+jobrunr-pro,1,2026-10-27T17:08:49Z,20-children no rate limiter 1,0.01,3.69,8.88,0.00,0.00,0.00,1
+jobrunr-pro,1,2026-10-27T17:09:48Z,20-children no rate limiter 2,0.02,3.50,8.93,0.00,0.00,0.00,1

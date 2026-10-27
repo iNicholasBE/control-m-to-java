@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Runs the nightly close once, clean, and records the batch window.
 #
-#   ./run_chain.sh <impl> <businessDate> [--scale 1|10] [--transport file|rest] [--label text] [--save-reference]
+#   ./run_chain.sh <impl> <businessDate> [--scale 1|10] [--portfolios N] [--transport file|rest] [--label text] [--save-reference]
 #
 # impl: jobrunr-oss | jobrunr-pro | springbatch (see impls/). Appends one row to <results>/windows.csv.
 source "$(dirname "$0")/lib.sh"
 
-[[ $# -ge 2 ]] || die "usage: run_chain.sh <impl> <businessDate> [--scale 1|10] [--transport file|rest] [--label text] [--save-reference]"
+[[ $# -ge 2 ]] || die "usage: run_chain.sh <impl> <businessDate> [--scale 1|10] [--portfolios N] [--transport file|rest] [--label text] [--save-reference]"
 load_impl "$1"; DATE="$2"; shift 2
-SCALE=1; TRANSPORT=file; LABEL=""; SAVE_REFERENCE=0; EXTRA_ARGS=()
+SCALE=1; PORTFOLIOS=20; TRANSPORT=file; LABEL=""; SAVE_REFERENCE=0; EXTRA_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --scale) SCALE="$2"; shift 2 ;;
+    --portfolios) PORTFOLIOS="$2"; shift 2 ;;
     --transport) TRANSPORT="$2"; shift 2 ;;
     --label) LABEL="$2"; shift 2 ;;
     --save-reference) SAVE_REFERENCE=1; shift ;;
@@ -22,7 +23,7 @@ done
 
 postgres_up
 build_impl
-POSITIONS=$(positions_file "$DATE" "$SCALE")
+POSITIONS=$(positions_file "$DATE" "$SCALE" "$PORTFOLIOS")
 WORK="$HARNESS/work/$IMPL"
 reset_db
 prepare_workdir "$WORK"

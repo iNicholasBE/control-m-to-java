@@ -29,6 +29,7 @@ def step(name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rows", type=int, default=200_000)
+    parser.add_argument("--portfolios", type=int, default=20, help="one scoring partition per portfolio")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--workdir", default=os.path.join(c.MODULE, "work", "window"))
     parser.add_argument("--out", required=True)
@@ -43,7 +44,7 @@ def main():
         for repeat in range(1, args.repeats + 1):
             c.reset_database()
             c.reset_workdir(args.workdir)
-            positions = c.ensure_positions(args.workdir, BUSINESS_DATE, args.rows)
+            positions = c.ensure_positions(args.workdir, BUSINESS_DATE, args.rows, args.portfolios)
             app = c.App(args.workdir, log_name=f"window-{args.rows}-{repeat}.log").start()
             app.wait_ready()
             app.post(BUSINESS_DATE)

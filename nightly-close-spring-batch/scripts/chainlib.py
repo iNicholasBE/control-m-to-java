@@ -162,14 +162,14 @@ def sha256(path):
 GENERATOR = os.path.abspath(os.path.join(MODULE, "..", "harness", "gen_positions.py"))
 
 
-def ensure_positions(workdir, business_date, rows):
-    """Generate the positions file with the shared harness generator (seed 42), cached per (date, rows)."""
-    cache = os.path.join(MODULE, "work", "cache", str(rows))
+def ensure_positions(workdir, business_date, rows, portfolios=20):
+    """Generate the positions file with the shared harness generator (seed 42), cached per (date, rows, portfolios)."""
+    cache = os.path.join(MODULE, "work", "cache", str(rows) if portfolios == 20 else f"{rows}-{portfolios}p")
     os.makedirs(cache, exist_ok=True)
     cached = os.path.join(cache, f"POSITIONS-{business_date}.csv")
     if not os.path.exists(cached):
         subprocess.run(["python3", GENERATOR, "--date", business_date, "--rows", str(rows), "--seed", "42",
-                        "--out-dir", cache], check=True, stdout=subprocess.DEVNULL)
+                        "--portfolios", str(portfolios), "--out-dir", cache], check=True, stdout=subprocess.DEVNULL)
     target = os.path.join(workdir, "inbox", f"POSITIONS-{business_date}.csv")
     if not os.path.exists(target) or sha256(target) != sha256(cached):
         shutil.copy(cached, target + ".part")

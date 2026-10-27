@@ -59,14 +59,16 @@ build_impl() {
   (eval "$IMPL_BUILD") >&2 || die "build failed for $IMPL"
 }
 
-# positions_file <date> <scale>: generates once, then reused (hard-linked into each work dir).
+# positions_file <date> <scale> [portfolios]: generates once, then reused (hard-linked into each work dir).
+# One scoring partition per portfolio, so the portfolio count is the number of batch children / partitions.
 positions_file() {
-  local date="$1" scale="$2" rows=$((200000 * $2))
+  local date="$1" scale="$2" portfolios="${3:-20}" rows=$((200000 * $2))
   local dir="$HARNESS/data/${scale}x"
+  [[ "$portfolios" == 20 ]] || dir="$dir-${portfolios}p"
   local file="$dir/POSITIONS-$date.csv"
   if [[ ! -f "$file" ]]; then
-    log "generating $rows positions for $date"
-    python3 "$HARNESS/gen_positions.py" --date "$date" --rows "$rows" --out-dir "$dir" >/dev/null
+    log "generating $rows positions in $portfolios portfolios for $date"
+    python3 "$HARNESS/gen_positions.py" --date "$date" --rows "$rows" --portfolios "$portfolios" --out-dir "$dir" >/dev/null
   fi
   echo "$file"
 }

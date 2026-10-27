@@ -132,9 +132,22 @@ done
 
 A READY file re-sent during the run attached to the existing run (deterministic id), one re-sent after DONE got the DONE file again, and when the simulator threw away the first DONE file, its re-sent READY got the DONE file re-emitted without a second run. Simulator exit code 0 in all four.
 
+### 4. 10,000 partitions, and the hand-off probe (2026-10-27, 16:12 to 17:10 UTC)
+
+Same machine and versions. `--portfolios 10000` puts the 200,000 rows in 10,000 portfolios, so Pro gets 10,000 batch children and OSS 10,000 partitions. Run on database `nightly_jobrunr_10k`, port 8282/8281 (`JOBRUNR_DB`, `IMPL_PORT`), because another Pro app was using the defaults. Labels `10k-*` and `20-children no rate limiter *` in `windows.csv` and `hops.csv`; the probe in `handoff-probe.csv` (`harness/handoff_probe.sh`, no-op jobs). Spring Batch on the same Postgres: `results/spring-batch/window-10000-partitions.csv`. Write-up with all commands: [`ForRonald.md`](../../ForRonald.md).
+
+| Chain, submit to finish | 10,000 partitions |
+|---|---|
+| Pro, rate limiter on | 68.2 s / 67.4 s (scoring 49.3 s: the limiter releases per poll tick and ramps from 35/s) |
+| Pro, rate limiter off | 27.1 s / 27.7 s |
+| Spring Batch | 33.7 s / 38.8 s (22.4 s creating 10,000 step executions before the first partition) |
+| OSS | 5.1 s / 4.9 s |
+
+The `exp-A` and `exp-B` rows (and each pair of `exp-C` and `exp-D` rows) in `windows.csv` and `hops.csv` have identical numbers in every column, so they are probably one measurement recorded twice. The 20-partition rate-limiter-off case was re-measured as `20-children no rate limiter 1/2`: chain 15.1 s and 14.7 s, hand-off 1 3.5 to 3.7 s, hand-off 2 8.9 s.
+
 ## Not run
 
-- 10x data (2,000,000 rows) windows, for either edition.
+- 10x data (2,000,000 rows) windows, for either edition. 10,000 partitions at 1x did run, see section 4.
 - Kill points `watcher`, `scoring-partition-17`, `join`, `report`, `recurring-trigger`; and more than 2 repeats per kill point.
 - Pro with `worker-capacity-policy=self-learning` (configurable, not measured), and Pro without the rate limiter (`rate-limit-partitions=false`) in this round.
 - `connections.sh` and `rolling_restart.sh` (their earlier CSVs were from the old shape and are gone).

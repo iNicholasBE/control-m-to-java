@@ -1,0 +1,3 @@
+rows,file_mb,repeat,watcher_s,extract_s,scoring_wall_s,partition_min_s,partition_max_s,join_s,aggregate_s,report_s,deliver_s,chain_total_s,report_sha256
+200000,113,1,0.27,2.03,13.48,0.01,0.23,0.03,0.06,0.03,0.05,33.73,5007fd41285fee6ab24be04821544f65f226002d69607e177a2669136793dffa
+200000,113,2,0.28,1.96,13.87,0.01,0.09,0.03,0.07,0.04,0.04,38.77,5007fd41285fee6ab24be04821544f65f226002d69607e177a2669136793dffa
